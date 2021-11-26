@@ -22,6 +22,7 @@ class ShadowSet(Dataset):
     def __getitem__(self, idx):
         image = Image.open(self.image_list[idx])
         name = image.filename.split('/')[-1]
+        print(name)
         mask = Image.open(self.mask_list[idx])
         real = Image.open(self.real_list[idx])
         if self.transform is not None:

@@ -17,6 +17,7 @@ from torch.autograd import Variable
 
 from dataset import *
 from loss import *
+from util import *
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -51,19 +52,30 @@ if data_name == 'ISTD':
         test_set, batch_size=batch_size, num_workers=num_workers, shuffle=True)
     print("load data finished!")
 
-
-generator = Net()
-
-optimizer = torch.optim.Adam(generator.parameters(), lr=0.0002, betas=(opt.b1, opt.b2))
+wavelet_dec = WaveletTransform(scale=2, dec=True)
+wavelet_rec = WaveletTransform(scale=2, dec=False)
+# generator = Net()
+# optimizer = torch.optim.Adam(generator.parameters(), lr=0.0002, betas=(b1, b2))
 
 step = 0
 for epoch in range(0, epochs):
     for i, batch in enumerate(train_loader):
         step += 1
         iter = i
-        image = batch[0]
-        mask = batch[1]
-        real = batch[2]
+        image = batch[0].cuda()
+        mask = batch[1].cuda()
+        real = batch[2].cuda()
         name = batch[3]
-        current_lr = 0.0002*0.5**(step/100000)
+        current_lr = 0.0002 * 0.5 ** (step/100000)
 
+        x_r = (image[:, 0, :, :]*255-105.648186)/255.+0.5
+        x_g = (image[:, 1, :, :]*255-95.4836)/255.+0.5
+        x_b = (image[:, 2, :, :]*255-86.4105)/255.+0.5
+        image = torch.cat(
+            [x_r.unsqueeze(1), x_g.unsqueeze(1), x_b.unsqueeze(1)], 1)
+
+        y_r = ((image[:, 0, :, :]-0.5)*255+121.2556)/255.
+        y_g = ((image[:, 1, :, :]-0.5)*255+114.89969)/255.
+        y_b = ((image[:, 2, :, :]-0.5)*255+102.02478)/255.
+        image = torch.cat(
+            [y_r.unsqueeze(1), y_g.unsqueeze(1), y_b.unsqueeze(1)], 1)
