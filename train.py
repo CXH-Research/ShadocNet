@@ -81,7 +81,7 @@ if len(device_ids) > 1:
     model_restoration = torch.nn.DataParallel(model, device_ids=device_ids)
 
 # Loss #
-criterion = losses.l1_relative()
+criterion_l1 = losses.l1_relative
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -107,17 +107,17 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     # Train #
     model.train()
     for i, data in enumerate(tqdm(train_loader), 0):
-
-        for param in model.parameters():
-            param.grad = None
-
         inp = data[0].cuda()
         tar = data[1].cuda()
         mas = data[2].cuda()
 
+        # --- Zero the parameter gradients --- #
+        optimizer.zero_grad()
+
+        # --- Forward + Backward + Optimize --- #
         res = model(inp)
 
-        l1 = criterion(res, tar, mas)
+        l1 = criterion_l1(res, tar, mas)
 
         loss = l1
 
