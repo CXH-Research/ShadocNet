@@ -1,6 +1,8 @@
 # datasets
 datasets/
 sample/
+checkpoints/
+results/
 
 # IDEA
 .idea/

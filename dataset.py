@@ -45,7 +45,6 @@ class DataLoaderTrain(Dataset):
         tar_img = Image.open(tar_path).convert('RGB')
         mask_img = Image.open(mask_path)
 
-
         inp_img = TF.to_tensor(inp_img)
         inp_img = TF.resize(inp_img, [256, 256])
         tar_img = TF.to_tensor(tar_img)
@@ -96,7 +95,7 @@ class DataLoaderTrain(Dataset):
 
         filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
 
-        return tar_img, inp_img, mask_img, filename
+        return inp_img, tar_img, mask_img, filename
 
 
 class DataLoaderVal(Dataset):
@@ -124,7 +123,6 @@ class DataLoaderVal(Dataset):
 
     def __getitem__(self, index):
         index_ = index % self.sizex
-        ps = self.ps
 
         inp_path = self.inp_filenames[index_]
         tar_path = self.tar_filenames[index_]
@@ -143,7 +141,7 @@ class DataLoaderVal(Dataset):
 
         filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
 
-        return tar_img, inp_img, mask_img, filename
+        return inp_img, tar_img, mask_img, filename
 
 
 class DataLoaderTest(Dataset):
