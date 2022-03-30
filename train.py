@@ -2,13 +2,11 @@ import os
 from config import Config
 
 import torch
-from torchvision.utils import save_image
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import random
 import time
-import cv2
 import numpy as np
 
 import utils
