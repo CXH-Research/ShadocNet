@@ -1,5 +1,6 @@
 from torchvision.utils import save_image
 import cv2
+import numpy as np
 
 
 def rmse_lab(imres, imtar, immas):
@@ -32,8 +33,8 @@ def torchRMSE(res, tar, mas):
     immas = cv2.imread('mas.png')
 
     immas = immas[:, :, 0:1]
-    err_masked, num_of_mask = rmse_lab(imtarget, imoutput, immask)
-    err_non_masked, num_of_non_mask = rmse_lab(imtarget, imoutput, 255 - immask)
-    err_all, all_mask = rmse_lab(imtarget, imoutput, np.ones_like(imoutput[:, :, 0:1]) * 255)
+    err_masked, num_of_mask = rmse_lab(imtar, imres, immas)
+    err_non_masked, num_of_non_mask = rmse_lab(imtar, imres, 255 - immas)
+    err_all, all_mask = rmse_lab(imtar, imres, np.ones_like(imres[:, :, 0:1]) * 255)
 
     return err_masked, err_non_masked, err_all, num_of_mask, num_of_non_mask, all_mask
