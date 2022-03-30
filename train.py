@@ -38,6 +38,7 @@ model_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'models', session)
 
 utils.mkdir(result_dir)
 utils.mkdir(model_dir)
+utils.mkdir('pretrained_models')
 
 train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
