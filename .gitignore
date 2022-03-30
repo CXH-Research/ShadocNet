@@ -3,6 +3,7 @@ dataset/
 sample/
 checkpoints/
 results/
+pretrained_models/
 
 # IDEA
 .idea/
