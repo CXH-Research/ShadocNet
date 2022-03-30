@@ -48,7 +48,7 @@ def l1_relative(reconstructed, real, mask):
 
 
 # --- Charbonnier Loss (L1) --- #
-class CharbonnierLoss(nn.Module):
+class CharbonnierLoss(torch.nn.Module):
 
     def __init__(self, eps=1e-3):
         super(CharbonnierLoss, self).__init__()
@@ -60,8 +60,9 @@ class CharbonnierLoss(nn.Module):
         loss = torch.mean(torch.sqrt((diff * diff) + (self.eps * self.eps)))
         return loss
 
+
 # --- Edge Loss --- #
-class EdgeLoss(nn.Module):
+class EdgeLoss(torch.nn.Module):
     def __init__(self):
         super(EdgeLoss, self).__init__()
         k = torch.Tensor([[.05, .25, .4, .25, .05]])

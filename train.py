@@ -59,8 +59,25 @@ train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.BATCH_SIZE
                           drop_last=False, pin_memory=True)
 
 val_dataset = get_validation_data(val_dir, {'patch_size': opt.TRAINING.VAL_PS})
-val_loader = DataLoader(dataset=val_dataset, batch_size=16, shuffle=False, num_workers=8, drop_last=False,
+val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.BATCH_SIZE, shuffle=False, num_workers=8,
+                        drop_last=False,
                         pin_memory=True)
 
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
+
+
+for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
+    epoch_start_time = time.time()
+    epoch_loss = 0
+    train_id = 1
+
+    # for i, data in enumerate(tqdm(train_loader), 0):
+    #     inp = data[0]
+    #     tar = data[1]
+    #     mas = data[2]
+    #
+    # for i, data in enumerate(tqdm(val_loader), 0):
+    #     inp = data[0]
+    #     tar = data[1]
+    #     mas = data[2]
