@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
+from torchvision.utils import save_image
 import utils
 
 from data import get_test_data
@@ -50,13 +51,9 @@ for dataset in datasets:
             torch.cuda.empty_cache()
 
             input_ = data_test[0].cuda()
-            filenames = data_test[1]
+            filenames = data_test[1][0]
 
             restored = model_restoration(input_)
-            restored = torch.clamp(restored[0], 0, 1)
 
-            restored = restored.permute(0, 2, 3, 1).cpu().detach().numpy()
+            save_image(restored, os.path.join(result_dir, filenames + '.png'))
 
-            for batch in range(len(restored)):
-                restored_img = img_as_ubyte(restored[batch])
-                utils.save_img((os.path.join(result_dir, filenames[batch] + '.png')), restored_img)
