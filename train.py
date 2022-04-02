@@ -11,6 +11,7 @@ import numpy as np
 
 import utils
 from data import get_training_data, get_validation_data
+from process import validate
 from model import Model
 from tqdm import tqdm
 import losses
@@ -126,35 +127,11 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
 
     # Evaluation #
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
-        model.eval()
-        err_m, err_nm, err_a, total_mask, total_nonmask, total_all, cntx = 0., 0., 0., 0., 0., 0., 0.
-        for ii, data_val in enumerate(tqdm(val_loader), 0):
-            inp = data_val[0].cuda()
-            tar = data_val[1].cuda()
-            mas = data_val[2].cuda()
 
-            with torch.no_grad():
-                res = model(inp)
+        rmse = validate(model, val_loader)
 
-            err_masked, err_non_masked, err_all, num_of_mask, num_of_non_mask, all_mask = utils.torchRMSE(res, tar, mas)
-
-            err_m += err_masked
-            err_nm += err_non_masked
-            err_a += err_all
-
-            total_mask += num_of_mask
-            total_nonmask += num_of_non_mask
-            total_all += all_mask
-            cntx += 1
-
-        RMSE_NS = err_nm / total_nonmask
-        RMSE_S = err_m / total_mask
-        RMSE_ALL = err_a / total_all
-
-        print("RMSE(NS,S,ALL):{},{},{}".format(RMSE_NS, RMSE_S, RMSE_ALL))
-
-        if RMSE_ALL < best_rmse:
-            best_rmse = RMSE_ALL
+        if rmse < best_rmse:
+            best_rmse = rmse
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
@@ -162,7 +139,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "model_best.pth"))
 
-        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_RMSE %.4f]" % (epoch, RMSE_ALL, best_epoch, best_rmse))
+        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_RMSE %.4f]" % (epoch, rmse, best_epoch, best_rmse))
 
     scheduler.step()
     print("------------------------------------------------------------------")
