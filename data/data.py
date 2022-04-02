@@ -1,5 +1,5 @@
 import os
-from dataset import DataLoaderTrain, DataLoaderVal, DataLoaderTest
+from data.dataset import DataLoaderTrain, DataLoaderVal, DataLoaderTest
 
 
 def get_training_data(img_dir, img_options):
