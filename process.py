@@ -11,10 +11,10 @@ def validate(model, val_loader):
         tar = data_val[1].cuda()
         mas = data_val[2].cuda()
 
+        inp = inp * mas + tar * (1 - mas)
+
         with torch.no_grad():
             res = model(inp)
-
-        res = res * mas + tar * (1 - mas)
 
         err_masked, err_non_masked, err_all, num_of_mask, num_of_non_mask, all_mask = utils.torchRMSE(res, tar, mas)
 

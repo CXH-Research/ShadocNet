@@ -114,6 +114,8 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # --- Zero the parameter gradients --- #
         optimizer.zero_grad()
 
+        inp = inp * mas + (1 - mas) * tar
+
         # --- Forward + Backward + Optimize --- #
         res = model(inp)
 
