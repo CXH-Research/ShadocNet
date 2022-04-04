@@ -9,7 +9,7 @@ MODEL:
 # Optimization arguments.
 OPTIM:
   BATCH_SIZE: 1
-  NUM_EPOCHS: 1
+  NUM_EPOCHS: 1500
   # NEPOCH_DECAY: [10]
   LR_INITIAL: 2e-4
   LR_MIN: 1e-6

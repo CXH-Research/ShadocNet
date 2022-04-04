@@ -82,6 +82,11 @@ if len(device_ids) > 1:
 
 # Loss #
 criterion_l1 = losses.l1_relative
+criterion_char = losses.CharbonnierLoss()
+criterion_edge = losses.EdgeLoss()
+criterion_perc = losses.Perceptual()
+criterion_tv = losses.total_variation_loss
+criterion_cont = losses.ContrastLoss()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -119,9 +124,27 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # --- Forward + Backward + Optimize --- #
         res = model(inp)
 
-        l1 = criterion_l1(res, tar, mas)
+        loss_l1 = 0
+        for idx in range(0, len(res)):
+            loss_l1 += criterion_l1(res[idx], tar, mas)
 
-        loss = l1
+        loss_edge = 0
+        for idx in range(0, len(res)):
+            loss_edge += criterion_edge(res[idx], tar)
+
+        loss_perc = 0
+        for idx in range(0, len(res)):
+            loss_perc = criterion_perc(res[idx], tar)
+
+        loss_tv = 0
+        for idx in range(0, len(res)):
+            loss_tv = criterion_tv(res[idx])
+
+        loss_cont = 0
+        for idx in range(0, len(res)):
+            loss_cont = criterion_cont(res[idx], tar, inp)
+
+        loss = loss_l1 + 0.05 * loss_edge + 0.04 * loss_perc + 0.02 * loss_tv + 0.01 * loss_cont
 
         loss.backward()
         optimizer.step()
