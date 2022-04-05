@@ -64,18 +64,18 @@ scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_e
 scheduler.step()
 
 # Resume #
-if opt.TRAINING.RESUME:
-    path_chk_rest = utils.get_last_path(model_dir, '_latest.pth')
-    utils.load_checkpoint(model, path_chk_rest)
-    start_epoch = utils.load_start_epoch(path_chk_rest) + 1
-    utils.load_optim(optimizer, path_chk_rest)
-
-    for i in range(1, start_epoch):
-        scheduler.step()
-    new_lr = scheduler.get_lr()[0]
-    print('------------------------------------------------------------------------------')
-    print("==> Resuming Training with learning rate:", new_lr)
-    print('------------------------------------------------------------------------------')
+# if opt.TRAINING.RESUME:
+#     path_chk_rest = utils.get_last_path(model_dir, '_latest.pth')
+#     utils.load_checkpoint(model, path_chk_rest)
+#     start_epoch = utils.load_start_epoch(path_chk_rest) + 1
+#     utils.load_optim(optimizer, path_chk_rest)
+#
+#     for i in range(1, start_epoch):
+#         scheduler.step()
+#     new_lr = scheduler.get_lr()[0]
+#     print('------------------------------------------------------------------------------')
+#     print("==> Resuming Training with learning rate:", new_lr)
+#     print('------------------------------------------------------------------------------')
 
 if len(device_ids) > 1:
     model_restoration = torch.nn.DataParallel(model, device_ids=device_ids)
