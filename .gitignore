@@ -1,3 +1,6 @@
+# sample images
+*.png
+
 # datasets
 dataset/
 sample/

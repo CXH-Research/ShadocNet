@@ -17,7 +17,7 @@ from pdb import set_trace as stx
 
 parser = argparse.ArgumentParser(description='Shadow Removal')
 
-parser.add_argument('--input_dir', default='./dataset/test/', type=str, help='Directory of validation images')
+parser.add_argument('--input_dir', default='./dataset/', type=str, help='Directory of validation images')
 parser.add_argument('--result_dir', default='./results/', type=str, help='Directory for results')
 parser.add_argument('--weights', default='./pretrained_models/model_best.pth', type=str, help='Path to weights')
 parser.add_argument('--gpus', default='0', type=str, help='CUDA_VISIBLE_DEVICES')
@@ -34,10 +34,11 @@ model.cuda()
 model_restoration = nn.DataParallel(model)
 model_restoration.eval()
 
-datasets = ['ISTD', 'SRD']
+datasets = ['ISTD']
 
 for dataset in datasets:
-    dir_test = os.path.join(args.input_dir, dataset, 'input')
+    dir_test = os.path.join(args.input_dir, dataset, 'test', 'input')
+    print(dir_test)
     test_dataset = get_test_data(dir_test, img_options={})
     test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False, num_workers=16, drop_last=False,
                              pin_memory=True)
@@ -53,7 +54,7 @@ for dataset in datasets:
             input_ = data_test[0].cuda()
             filenames = data_test[1][0]
 
-            restored = model_restoration(input_)
+            restored = model_restoration(input_)[0]
 
             save_image(restored, os.path.join(result_dir, filenames + '.png'))
 

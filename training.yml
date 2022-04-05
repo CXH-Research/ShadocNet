@@ -2,9 +2,9 @@ GPU: [0]
 
 VERBOSE: True
 
-MODEL:
-  MODE: 'Deraining'
-  SESSION: 'MPRNet'
+#MODEL:
+#  MODE: 'Deraining'
+#  SESSION: 'MPRNet'
 
 # Optimization arguments.
 OPTIM:
@@ -20,6 +20,6 @@ TRAINING:
   RESUME: False
   TRAIN_PS: 256
   VAL_PS: 256
-  TRAIN_DIR: './dataset/train'       # path to training data
-  VAL_DIR: './dataset/test' # path to validation data
+  TRAIN_DIR: './dataset/ISTD/train'       # path to training data
+  VAL_DIR: './dataset/ISTD/test' # path to validation data
   SAVE_DIR: './checkpoints'           # path to save models and images

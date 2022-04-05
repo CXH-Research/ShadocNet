@@ -34,11 +34,11 @@ start_epoch = 1
 mode = opt.MODEL.MODE
 session = opt.MODEL.SESSION
 
-result_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'results', session)
-model_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'models', session)
+# result_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'results', session)
+# model_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'models', session)
 
-utils.mkdir(result_dir)
-utils.mkdir(model_dir)
+# utils.mkdir(result_dir)
+# utils.mkdir(model_dir)
 utils.mkdir('pretrained_models')
 
 train_dir = opt.TRAINING.TRAIN_DIR
@@ -132,17 +132,11 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         for idx in range(0, len(res)):
             loss_edge += criterion_edge(res[idx], tar)
 
-        loss_perc = 0
-        for idx in range(0, len(res)):
-            loss_perc = criterion_perc(res[idx], tar)
+        loss_perc = criterion_perc(res[0], tar)
 
-        loss_tv = 0
-        for idx in range(0, len(res)):
-            loss_tv = criterion_tv(res[idx])
+        loss_tv = criterion_tv(res[0])
 
-        loss_cont = 0
-        for idx in range(0, len(res)):
-            loss_cont = criterion_cont(res[idx], tar, inp)
+        loss_cont = criterion_cont(res[0], tar, inp)
 
         loss = loss_l1 + 0.05 * loss_edge + 0.04 * loss_perc + 0.02 * loss_tv + 0.01 * loss_cont
 
