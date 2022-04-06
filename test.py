@@ -37,8 +37,7 @@ model_restoration.eval()
 datasets = ['ISTD']
 
 for dataset in datasets:
-    dir_test = os.path.join(args.input_dir, dataset, 'test', 'input')
-    print(dir_test)
+    dir_test = os.path.join(args.input_dir, dataset, 'test')
     test_dataset = get_test_data(dir_test, img_options={})
     test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False, num_workers=16, drop_last=False,
                              pin_memory=True)
@@ -52,7 +51,9 @@ for dataset in datasets:
             torch.cuda.empty_cache()
 
             input_ = data_test[0].cuda()
-            filenames = data_test[1][0]
+            target = data_test[1].cuda()
+            mask = data_test[2].cuda()
+            filenames = data_test[3][0]
 
             restored = model_restoration(input_)[0]
 

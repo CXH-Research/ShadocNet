@@ -119,7 +119,9 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # --- Zero the parameter gradients --- #
         optimizer.zero_grad()
 
-        inp = inp * mas + (1 - mas) * tar
+        shadow = inp * mas
+
+        non_s = (1 - mas) * inp
 
         # --- Forward + Backward + Optimize --- #
         res = model(inp)
@@ -138,7 +140,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
 
         loss_cont = criterion_cont(res[0], tar, inp)
 
-        loss = loss_l1 + 0.05 * loss_edge + 0.04 * loss_perc + 0.02 * loss_tv + 0.01 * loss_cont
+        loss = loss_l1 + 0.05 * loss_edge + 0.04 * loss_perc + 0.02 * loss_tv + 0.02 * loss_cont
 
         loss.backward()
         optimizer.step()

@@ -145,24 +145,42 @@ class DataLoaderVal(Dataset):
 
 
 class DataLoaderTest(Dataset):
-    def __init__(self, inp_dir, img_options):
+    def __init__(self, img_dir, img_options):
         super(DataLoaderTest, self).__init__()
 
-        inp_files = sorted(os.listdir(inp_dir))
-        self.inp_filenames = [os.path.join(inp_dir, x)
-                              for x in inp_files if is_image_file(x)]
+        inp_files = sorted(os.listdir(os.path.join(img_dir, 'input')))
+        tar_files = sorted(os.listdir(os.path.join(img_dir, 'target')))
+        mask_files = sorted(os.listdir(os.path.join(img_dir, 'mask')))
 
-        self.inp_size = len(self.inp_filenames)
+        self.inp_filenames = [os.path.join(
+            img_dir, 'input', x) for x in inp_files if is_image_file(x)]
+        self.tar_filenames = [os.path.join(
+            img_dir, 'target', x) for x in tar_files if is_image_file(x)]
+        self.mask_filenames = [os.path.join(
+            img_dir, 'mask', x) for x in mask_files if is_image_file(x)]
+
         self.img_options = img_options
+        self.inp_size = len(self.tar_filenames)
 
     def __len__(self):
         return self.inp_size
 
     def __getitem__(self, index):
-        path_inp = self.inp_filenames[index]
-        filename = os.path.splitext(os.path.split(path_inp)[-1])[0]
-        inp = Image.open(path_inp).convert('RGB')
+        inp_path = self.inp_filenames[index]
+        tar_path = self.tar_filenames[index]
+        mask_path = self.mask_filenames[index]
 
-        inp = TF.to_tensor(inp)
-        inp = TF.resize(inp, [256, 256])
-        return inp, filename
+        inp_img = Image.open(inp_path).convert('RGB')
+        tar_img = Image.open(tar_path).convert('RGB')
+        mask_img = Image.open(mask_path)
+
+        inp_img = TF.to_tensor(inp_img)
+        inp_img = TF.resize(inp_img, [256, 256])
+        tar_img = TF.to_tensor(tar_img)
+        tar_img = TF.resize(tar_img, [256, 256])
+        mask_img = TF.to_tensor(mask_img)
+        mask_img = TF.resize(mask_img, [256, 256])
+
+        filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
+
+        return inp_img, tar_img, mask_img, filename
