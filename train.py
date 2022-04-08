@@ -12,7 +12,7 @@ import numpy as np
 import utils
 from data import get_training_data, get_validation_data
 from process import validate
-from model import Model
+from model import HWMNet, CMFNet
 from tqdm import tqdm
 import losses
 from warmup_scheduler import GradualWarmupScheduler
@@ -45,8 +45,11 @@ train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
-model = Model()
-model.cuda()
+# model = Model()
+l_net = HWMNet()
+f_net = CMFNet()
+l_net.cuda()
+f_net.cuda()
 
 device_ids = [i for i in range(torch.cuda.device_count())]
 if torch.cuda.device_count() > 1:
@@ -54,7 +57,7 @@ if torch.cuda.device_count() > 1:
 
 new_lr = opt.OPTIM.LR_INITIAL
 
-optimizer = optim.Adam(model.parameters(), lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
+optimizer = optim.Adam(list(l_net.parameters()) + list(f_net.parameters()), lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
 
 # Scheduler #
 warmup_epochs = 3
@@ -77,11 +80,9 @@ scheduler.step()
 #     print("==> Resuming Training with learning rate:", new_lr)
 #     print('------------------------------------------------------------------------------')
 
-if len(device_ids) > 1:
-    model_restoration = torch.nn.DataParallel(model, device_ids=device_ids)
-
 # Loss #
-criterion_l1 = losses.l1_relative
+criterion_rl1 = losses.l1_relative
+criterion_l1 = torch.nn.L1Loss()
 criterion_char = losses.CharbonnierLoss()
 criterion_edge = losses.EdgeLoss()
 criterion_perc = losses.Perceptual()
@@ -110,7 +111,8 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     train_id = 1
 
     # Train #
-    model.train()
+    l_net.train()
+    f_net.train()
     for i, data in enumerate(tqdm(train_loader), 0):
         inp = data[0].cuda()
         tar = data[1].cuda()
@@ -119,28 +121,20 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # --- Zero the parameter gradients --- #
         optimizer.zero_grad()
 
-        shadow = inp * mas
-
-        non_s = (1 - mas) * inp
-
         # --- Forward + Backward + Optimize --- #
-        res = model(inp)
+        stage1 = l_net(inp)
+        stage1_s = stage1 * mas
 
-        loss_l1 = 0
-        for idx in range(0, len(res)):
-            loss_l1 += criterion_l1(res[idx], tar, mas)
+        stage2 = f_net(inp)[0]
+        stage2_ns = stage2 * (1 - mas)
 
-        loss_edge = 0
-        for idx in range(0, len(res)):
-            loss_edge += criterion_edge(res[idx], tar)
+        out = stage1_s + stage2_ns
 
-        loss_perc = criterion_perc(res[0], tar)
+        loss_rl1 = criterion_rl1(out, tar, mas)
+        loss_tv = criterion_tv(out)
+        loss_perc = criterion_perc(out, tar)
 
-        loss_tv = criterion_tv(res[0])
-
-        loss_cont = criterion_cont(res[0], tar, inp)
-
-        loss = loss_l1 + 0.05 * loss_edge + 0.04 * loss_perc + 0.02 * loss_tv + 0.02 * loss_cont
+        loss = loss_rl1 + 0.02 * loss_tv + 0.04 * loss_perc
 
         loss.backward()
         optimizer.step()
@@ -149,14 +143,15 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     # Evaluation #
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
 
-        rmse = validate(model, val_loader)
+        rmse = validate(l_net, f_net, val_loader)
 
         if rmse < best_rmse:
             best_rmse = rmse
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
-                'state_dict': model.state_dict(),
+                'l_net': l_net.state_dict(),
+                'f_net': f_net.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "model_best.pth"))
 

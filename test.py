@@ -11,7 +11,7 @@ from torchvision.utils import save_image
 import utils
 
 from data import get_test_data
-from model import Model
+from model import HWMNet
 from skimage import img_as_ubyte
 from pdb import set_trace as stx
 
@@ -27,14 +27,14 @@ args = parser.parse_args()
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
-model = Model()
+model = HWMNet()
 utils.load_checkpoint(model, args.weights)
 print("===>Testing using weights: ", args.weights)
 model.cuda()
 model_restoration = nn.DataParallel(model)
 model_restoration.eval()
 
-datasets = ['ISTD']
+datasets = ['ISTD+']
 
 for dataset in datasets:
     dir_test = os.path.join(args.input_dir, dataset, 'test')

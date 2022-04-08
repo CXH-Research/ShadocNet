@@ -8,7 +8,7 @@ VERBOSE: True
 
 # Optimization arguments.
 OPTIM:
-  BATCH_SIZE: 3
+  BATCH_SIZE: 1
   NUM_EPOCHS: 1500
   # NEPOCH_DECAY: [10]
   LR_INITIAL: 2e-4
@@ -20,6 +20,6 @@ TRAINING:
   RESUME: False
   TRAIN_PS: 256
   VAL_PS: 256
-  TRAIN_DIR: './dataset/ISTD/train'       # path to training data
-  VAL_DIR: './dataset/ISTD/test' # path to validation data
-  SAVE_DIR: './checkpoints'           # path to save models and images
+  TRAIN_DIR: './dataset/ISTD+/train'       # path to training data
+  VAL_DIR: './dataset/ISTD+/test' # path to validation data
+#  SAVE_DIR: './checkpoints'           # path to save models and images
