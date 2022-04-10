@@ -3,23 +3,26 @@ from tqdm import tqdm
 import utils
 
 
-def validate(l_net, f_net, val_loader):
-    l_net.eval()
-    f_net.eval()
+def validate(models, val_loader):
+    for model in models:
+        model.eval()
     err_m, err_nm, err_a, total_mask, total_nonmask, total_all, cntx = 0., 0., 0., 0., 0., 0., 0.
     for ii, data_val in enumerate(tqdm(val_loader), 0):
         inp = data_val[0].cuda()
         tar = data_val[1].cuda()
         mas = data_val[2].cuda()
+        foremas = 1 - mas
 
         with torch.no_grad():
-            stage1 = l_net(inp)
-            stage1_s = stage1 * mas
+            stage1 = models[0](inp)
+            fore = torch.cat([stage1, mas], dim=1).cuda()
 
-            stage2 = f_net(inp)[0]
-            stage2_ns = stage2 * (1 - mas)
+            stage2 = models[1](inp)[0]
+            feed = torch.cat([inp, foremas], dim=1).cuda()
 
-        res = stage1_s + stage2_ns
+            stage3 = models[2](feed, fore)[0]
+
+        res = stage3
 
         err_masked, err_non_masked, err_all, num_of_mask, num_of_non_mask, all_mask = utils.torchRMSE(res, tar, mas)
 

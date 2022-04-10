@@ -12,7 +12,8 @@ import numpy as np
 import utils
 from data import get_training_data, get_validation_data
 from process import validate
-from model import HWMNet, CMFNet
+from model import HWMNet, CMFNet, SSCurveNet
+from model.unet import squeezenet1_1, CreateNetNeuralPointRender
 from tqdm import tqdm
 import losses
 from warmup_scheduler import GradualWarmupScheduler
@@ -47,8 +48,13 @@ val_dir = opt.TRAINING.VAL_DIR
 # Model #
 # model = Model()
 l_net = HWMNet()
-f_net = CMFNet()
 l_net.cuda()
+c_net = CMFNet()
+c_net.cuda()
+sq = squeezenet1_1(pretrained=True)
+model = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False)
+f_net = SSCurveNet(sq)
+# f_net = model
 f_net.cuda()
 
 device_ids = [i for i in range(torch.cuda.device_count())]
@@ -57,7 +63,8 @@ if torch.cuda.device_count() > 1:
 
 new_lr = opt.OPTIM.LR_INITIAL
 
-optimizer = optim.Adam(list(l_net.parameters()) + list(f_net.parameters()), lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
+params = list(l_net.parameters()) + list(c_net.parameters()) + list(f_net.parameters())
+optimizer = optim.Adam(params, lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
 
 # Scheduler #
 warmup_epochs = 3
@@ -112,23 +119,25 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
 
     # Train #
     l_net.train()
+    c_net.train()
     f_net.train()
     for i, data in enumerate(tqdm(train_loader), 0):
         inp = data[0].cuda()
         tar = data[1].cuda()
         mas = data[2].cuda()
+        foremas = 1 - mas
 
         # --- Zero the parameter gradients --- #
         optimizer.zero_grad()
 
         # --- Forward + Backward + Optimize --- #
         stage1 = l_net(inp)
-        stage1_s = stage1 * mas
+        fore = torch.cat([stage1, mas], dim=1).cuda()
 
-        stage2 = f_net(inp)[0]
-        stage2_ns = stage2 * (1 - mas)
+        stage2 = c_net(inp)[0]
+        feed = torch.cat([inp, foremas], dim=1).cuda()
 
-        out = stage1_s + stage2_ns
+        out = f_net(feed, fore)[0]
 
         loss_rl1 = criterion_rl1(out, tar, mas)
         loss_tv = criterion_tv(out)
@@ -143,7 +152,8 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     # Evaluation #
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
 
-        rmse = validate(l_net, f_net, val_loader)
+        models = [l_net, c_net, f_net]
+        rmse = validate(models, val_loader)
 
         if rmse < best_rmse:
             best_rmse = rmse
@@ -151,6 +161,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
             torch.save({
                 'epoch': best_epoch,
                 'l_net': l_net.state_dict(),
+                'c_net': c_net.state_dict(),
                 'f_net': f_net.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "model_best.pth"))
