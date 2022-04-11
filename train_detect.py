@@ -13,6 +13,7 @@ import utils
 from data import get_training_data, get_validation_data
 from process import validate
 from model.detection import UNET
+from model.detection import DDPM
 from model.unet import squeezenet1_1, CreateNetNeuralPointRender
 from tqdm import tqdm
 import losses
@@ -41,7 +42,7 @@ train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
-model = UNET(3, 1).cuda()
+model = DDPM().cuda()
 
 device_ids = [i for i in range(torch.cuda.device_count())]
 if torch.cuda.device_count() > 1:
@@ -77,7 +78,6 @@ print('===> Loading datasets')
 
 best_acc = 0
 best_epoch = 1
-
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     epoch_start_time = time.time()
     epoch_loss = 0
