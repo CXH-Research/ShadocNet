@@ -352,8 +352,7 @@ class DDPM(Module):
         * `t` has shape `[batch_size]`
         """
 
-        bs = x.shape[0]
-        t = torch.randint(0, 1000, (bs, ), dtype=torch.long).cuda()
+        t = torch.randn_like(x)
 
         # Get image projection
         x = self.image_proj(x)
