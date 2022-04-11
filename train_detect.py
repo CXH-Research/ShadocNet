@@ -1,23 +1,19 @@
 import os
-from config import Config
+import random
+import time
 
+import numpy as np
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-
-import random
-import time
-import numpy as np
+from tqdm import tqdm
+from warmup_scheduler import GradualWarmupScheduler
 
 import utils
+from config import Config
 from data import get_training_data, get_validation_data
-from process import validate
-from model.detection import UNET
+from torchvision.utils import save_image
 from model.detection import DDPM
-from model.unet import squeezenet1_1, CreateNetNeuralPointRender
-from tqdm import tqdm
-import losses
-from warmup_scheduler import GradualWarmupScheduler
 
 opt = Config('training.yml')
 
@@ -112,7 +108,9 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
             for i, data in enumerate(tqdm(val_loader), 0):
                 inp = data[0].cuda()
                 mas = data[2].cuda()
-                preds = torch.sigmoid(model(inp))
+                res = model(inp)
+                save_image(res, 'pred_mask.png')
+                preds = torch.sigmoid(res)
                 preds = (preds > 0.5).float()
                 num_correct += (preds == mas).sum()
                 num_pixels += torch.numel(preds)
@@ -131,8 +129,6 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
                 'unet': model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "detect_best.pth"))
-
-        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_RMSE %.4f]" % (epoch, dice_score, best_epoch, best_acc))
 
     scheduler.step()
     print("------------------------------------------------------------------")
