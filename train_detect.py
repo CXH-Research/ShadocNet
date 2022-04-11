@@ -57,7 +57,8 @@ scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_e
 scheduler.step()
 
 # Loss #
-loss_fn = torch.nn.BCEWithLogitsLoss()
+criterion_BCE = torch.nn.BCEWithLogitsLoss().cuda()
+criterion_L1 = torch.nn.L1Loss().cuda()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -72,7 +73,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.BATCH_SIZE, sh
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_acc = 0
+best_dice = 0
 best_epoch = 1
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     epoch_start_time = time.time()
@@ -91,7 +92,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # --- Forward + Backward + Optimize --- #
         pred = model(inp)
 
-        loss = loss_fn(pred, mas)
+        loss = criterion_BCE(pred, mas) + criterion_L1(pred, mas)
 
         loss.backward()
         optimizer.step()
@@ -120,13 +121,13 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         print(
             f"Got {num_correct}/{num_pixels} with acc {num_correct / num_pixels * 100:.2f}"
         )
-        print(f"Dice score: {dice_score / len(val_loader)}")
-        if dice_score > best_acc:
-            best_acc = dice_score
+        print(f"Best epoch : {best_epoch}, Best dice score : {best_dice}")
+        if dice_score > best_dice:
+            best_dice = dice_score
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
-                'unet': model.state_dict(),
+                'ddpm': model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "detect_best.pth"))
 
