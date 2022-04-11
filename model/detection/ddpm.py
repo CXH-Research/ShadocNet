@@ -344,7 +344,7 @@ class DDPM(Module):
         # Final normalization and convolution layer
         self.norm = nn.GroupNorm(8, n_channels)
         self.act = Swish()
-        self.final = nn.Conv2d(in_channels, image_channels, kernel_size=(3, 3), padding=(1, 1))
+        self.final = nn.Conv2d(in_channels, 1, kernel_size=(3, 3), padding=(1, 1))
 
     def forward(self, x: torch.Tensor):
         """
