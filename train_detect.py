@@ -12,7 +12,7 @@ import numpy as np
 import utils
 from data import get_training_data, get_validation_data
 from process import validate
-from model import SSCurveNet
+from model.detection import UNET
 from model.unet import squeezenet1_1, CreateNetNeuralPointRender
 from tqdm import tqdm
 import losses
@@ -35,27 +35,13 @@ start_epoch = 1
 mode = opt.MODEL.MODE
 session = opt.MODEL.SESSION
 
-# result_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'results', session)
-# model_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'models', session)
-
-# utils.mkdir(result_dir)
-# utils.mkdir(model_dir)
 utils.mkdir('pretrained_models')
 
 train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
-# model = Model()
-l_net = HWMNet()
-l_net.cuda()
-c_net = CMFNet()
-c_net.cuda()
-sq = squeezenet1_1(pretrained=True)
-model = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False)
-f_net = SSCurveNet(sq)
-# f_net = model
-f_net.cuda()
+model = UNET(3, 1).cuda()
 
 device_ids = [i for i in range(torch.cuda.device_count())]
 if torch.cuda.device_count() > 1:
@@ -63,7 +49,7 @@ if torch.cuda.device_count() > 1:
 
 new_lr = opt.OPTIM.LR_INITIAL
 
-params = list(l_net.parameters()) + list(c_net.parameters()) + list(f_net.parameters())
+params = model.parameters()
 optimizer = optim.Adam(params, lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
 
 # Scheduler #
@@ -73,28 +59,8 @@ scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, opt.OPTIM.NUM
 scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_epochs, after_scheduler=scheduler_cosine)
 scheduler.step()
 
-# Resume #
-# if opt.TRAINING.RESUME:
-#     path_chk_rest = utils.get_last_path(model_dir, '_latest.pth')
-#     utils.load_checkpoint(model, path_chk_rest)
-#     start_epoch = utils.load_start_epoch(path_chk_rest) + 1
-#     utils.load_optim(optimizer, path_chk_rest)
-#
-#     for i in range(1, start_epoch):
-#         scheduler.step()
-#     new_lr = scheduler.get_lr()[0]
-#     print('------------------------------------------------------------------------------')
-#     print("==> Resuming Training with learning rate:", new_lr)
-#     print('------------------------------------------------------------------------------')
-
 # Loss #
-criterion_rl1 = losses.l1_relative
-criterion_l1 = torch.nn.L1Loss()
-criterion_char = losses.CharbonnierLoss()
-criterion_edge = losses.EdgeLoss()
-criterion_perc = losses.Perceptual()
-criterion_tv = losses.total_variation_loss
-criterion_cont = losses.ContrastLoss()
+loss_fn = torch.nn.BCEWithLogitsLoss()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -109,7 +75,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.BATCH_SIZE, sh
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_rmse = 1000
+best_acc = 0
 best_epoch = 1
 
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
@@ -118,32 +84,18 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     train_id = 1
 
     # Train #
-    l_net.train()
-    c_net.train()
-    f_net.train()
+    model.train()
     for i, data in enumerate(tqdm(train_loader), 0):
         inp = data[0].cuda()
-        tar = data[1].cuda()
         mas = data[2].cuda()
-        foremas = 1 - mas
 
         # --- Zero the parameter gradients --- #
         optimizer.zero_grad()
 
         # --- Forward + Backward + Optimize --- #
-        stage1 = l_net(inp)
-        fore = torch.cat([stage1, mas], dim=1).cuda()
+        pred = model(inp)
 
-        stage2 = c_net(inp)[0]
-        feed = torch.cat([inp, foremas], dim=1).cuda()
-
-        out = f_net(feed, fore)[0]
-
-        loss_rl1 = criterion_rl1(out, tar, mas)
-        loss_tv = criterion_tv(out)
-        loss_perc = criterion_perc(out, tar)
-
-        loss = loss_rl1 + 0.02 * loss_tv + 0.04 * loss_perc
+        loss = loss_fn(pred, mas)
 
         loss.backward()
         optimizer.step()
@@ -152,21 +104,35 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     # Evaluation #
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
 
-        models = [l_net, c_net, f_net]
-        rmse = validate(models, val_loader)
-
-        if rmse < best_rmse:
-            best_rmse = rmse
+        model.eval()
+        num_correct = 0
+        num_pixels = 0
+        dice_score = 0
+        with torch.no_grad():
+            for i, data in enumerate(tqdm(val_loader), 0):
+                inp = data[0].cuda()
+                mas = data[2].cuda()
+                preds = torch.sigmoid(model(inp))
+                preds = (preds > 0.5).float()
+                num_correct += (preds == mas).sum()
+                num_pixels += torch.numel(preds)
+                dice_score += (2 * (preds * mas).sum()) / (
+                        (preds + mas).sum() + 1e-8
+                )
+        print(
+            f"Got {num_correct}/{num_pixels} with acc {num_correct / num_pixels * 100:.2f}"
+        )
+        print(f"Dice score: {dice_score / len(val_loader)}")
+        if dice_score > best_acc:
+            best_acc = dice_score
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
-                'l_net': l_net.state_dict(),
-                'c_net': c_net.state_dict(),
-                'f_net': f_net.state_dict(),
+                'unet': model.state_dict(),
                 'optimizer': optimizer.state_dict()
-            }, os.path.join('pretrained_models', "model_best.pth"))
+            }, os.path.join('pretrained_models', "detect_best.pth"))
 
-        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_RMSE %.4f]" % (epoch, rmse, best_epoch, best_rmse))
+        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_RMSE %.4f]" % (epoch, dice_score, best_epoch, best_acc))
 
     scheduler.step()
     print("------------------------------------------------------------------")
