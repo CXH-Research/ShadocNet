@@ -352,7 +352,8 @@ class DDPM(Module):
         * `t` has shape `[batch_size]`
         """
 
-        t = torch.randn_like(x)
+        t = torch.ones(x.shape[0]) * 50
+        t = self.time_emb(t)
 
         # Get image projection
         x = self.image_proj(x)
