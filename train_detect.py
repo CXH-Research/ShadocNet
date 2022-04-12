@@ -16,7 +16,7 @@ from data import get_training_data, get_validation_data
 from losses import dice_loss
 from torchvision.utils import save_image
 from model.detection import DDPM
-from model.detection import UNET
+from model.detection import resnet34
 from evaluation.ber import BER
 
 opt = Config('training.yml')
@@ -42,8 +42,8 @@ train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
-model = DDPM().cuda()
-# model = UNET().cuda()
+# model = DDPM().cuda()
+model = resnet34(3, 1).cuda()
 
 device_ids = [i for i in range(torch.cuda.device_count())]
 if torch.cuda.device_count() > 1:
