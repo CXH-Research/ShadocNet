@@ -3,18 +3,7 @@ from typing import Optional, Tuple, Union, List
 
 import torch
 from torch import nn
-
-from labml_helpers.module import Module
-
-
-class Swish(Module):
-    """
-    ### Swish actiavation function
-    $$x \cdot \sigma(x)$$
-    """
-
-    def forward(self, x):
-        return x * torch.sigmoid(x)
+from torch.nn import functional as F
 
 
 class TimeEmbedding(nn.Module):
@@ -30,8 +19,6 @@ class TimeEmbedding(nn.Module):
         self.n_channels = n_channels
         # First linear layer
         self.lin1 = nn.Linear(self.n_channels // 4, self.n_channels)
-        # Activation
-        self.act = Swish()
         # Second linear layer
         self.lin2 = nn.Linear(self.n_channels, self.n_channels)
 
@@ -47,19 +34,19 @@ class TimeEmbedding(nn.Module):
         # where $d$ is `half_dim`
         half_dim = self.n_channels // 8
         emb = math.log(10_000) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=t.device) * -emb)
+        emb = torch.exp(torch.arange(half_dim, dtype=torch.float32) * -emb).cuda()
         emb = t[:, None] * emb[None, :]
         emb = torch.cat((emb.sin(), emb.cos()), dim=1)
 
         # Transform with the MLP
-        emb = self.act(self.lin1(emb))
+        emb = F.silu(self.lin1(emb))
         emb = self.lin2(emb)
 
         #
         return emb
 
 
-class ResidualBlock(Module):
+class ResidualBlock(nn.Module):
     """
     ### Residual block
     A residual block has two convolution layers with group normalization.
@@ -76,12 +63,10 @@ class ResidualBlock(Module):
         super().__init__()
         # Group normalization and the first convolution layer
         self.norm1 = nn.GroupNorm(n_groups, in_channels)
-        self.act1 = Swish()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), padding=(1, 1))
 
         # Group normalization and the second convolution layer
         self.norm2 = nn.GroupNorm(n_groups, out_channels)
-        self.act2 = Swish()
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=(3, 3), padding=(1, 1))
 
         # If the number of input channels is not equal to the number of output channels we have to
@@ -100,17 +85,17 @@ class ResidualBlock(Module):
         * `t` has shape `[batch_size, time_channels]`
         """
         # First convolution layer
-        h = self.conv1(self.act1(self.norm1(x)))
+        h = self.conv1(F.silu(self.norm1(x)))
         # Add time embeddings
         h += self.time_emb(t)[:, :, None, None]
         # Second convolution layer
-        h = self.conv2(self.act2(self.norm2(h)))
+        h = self.conv2(F.silu(self.norm2(h)))
 
         # Add the shortcut connection and return
         return h + self.shortcut(x)
 
 
-class AttentionBlock(Module):
+class AttentionBlock(nn.Module):
     """
     ### Attention block
     This is similar to [transformer multi-head attention](../../transformers/mha.html).
@@ -177,7 +162,7 @@ class AttentionBlock(Module):
         return res
 
 
-class DownBlock(Module):
+class DownBlock(nn.Module):
     """
     ### Down block
     This combines `ResidualBlock` and `AttentionBlock`. These are used in the first half of U-Net at each resolution.
@@ -197,7 +182,7 @@ class DownBlock(Module):
         return x
 
 
-class UpBlock(Module):
+class UpBlock(nn.Module):
     """
     ### Up block
     This combines `ResidualBlock` and `AttentionBlock`. These are used in the second half of U-Net at each resolution.
@@ -219,7 +204,7 @@ class UpBlock(Module):
         return x
 
 
-class MiddleBlock(Module):
+class MiddleBlock(nn.Module):
     """
     ### Middle block
     It combines a `ResidualBlock`, `AttentionBlock`, followed by another `ResidualBlock`.
@@ -246,12 +231,13 @@ class Upsample(nn.Module):
 
     def __init__(self, n_channels):
         super().__init__()
-        self.conv = nn.ConvTranspose2d(n_channels, n_channels, (4, 4), (2, 2), (1, 1))
+        self.conv = nn.ConvTranspose2d(n_channels, n_channels, 3, 1, 1)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
         # `t` is not used, but it's kept in the arguments because for the attention layer function signature
         # to match with `ResidualBlock`.
         _ = t
+        x = F.interpolate(x, scale_factor=2.0, mode='nearest')
         return self.conv(x)
 
 
@@ -262,7 +248,7 @@ class Downsample(nn.Module):
 
     def __init__(self, n_channels):
         super().__init__()
-        self.conv = nn.Conv2d(n_channels, n_channels, (3, 3), (2, 2), (1, 1))
+        self.conv = nn.Conv2d(n_channels, n_channels, 3, 2, 1)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
         # `t` is not used, but it's kept in the arguments because for the attention layer function signature
@@ -271,7 +257,7 @@ class Downsample(nn.Module):
         return self.conv(x)
 
 
-class DDPM(Module):
+class DDPM(nn.Module):
     """
     ## U-Net
     """
@@ -343,7 +329,6 @@ class DDPM(Module):
 
         # Final normalization and convolution layer
         self.norm = nn.GroupNorm(8, n_channels)
-        self.act = Swish()
         self.final = nn.Conv2d(in_channels, 1, kernel_size=(3, 3), padding=(1, 1))
 
     def forward(self, x: torch.Tensor):
@@ -380,4 +365,4 @@ class DDPM(Module):
                 x = m(x, t)
 
         # Final normalization and convolution
-        return self.final(self.act(self.norm(x)))
+        return self.final(F.silu(self.norm(x)))
