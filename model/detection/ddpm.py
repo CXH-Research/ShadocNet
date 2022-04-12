@@ -278,10 +278,8 @@ class Upsample(nn.Module):
     def __init__(self, n_channels):
         super().__init__()
         self.up = nn.Sequential(
-            nn.Upsample(scale_factor=2),
-            conv2d(n_channels, n_channels, 3, padding=1),
-            nn.BatchNorm2d(n_channels),
-            nn.ReLU(inplace=True)
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            conv2d(n_channels, n_channels, 3, padding=1)
         )
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
