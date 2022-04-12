@@ -3,6 +3,7 @@ import random
 import time
 
 import numpy as np
+import cv2
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -112,7 +113,10 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
                 mas = data[2].cuda()
                 res = model(inp)
                 save_image(res, 'pred_mask.png')
-                score, accuracy = BER(mas, res)
+                save_image(mas, 'gt_mask.png')
+                predict = cv2.imread('pred_mask.png', cv2.IMREAD_GRAYSCALE)
+                label = cv2.imread('gt_mask.png', cv2.IMREAD_GRAYSCALE)
+                score, accuracy = BER(torch.from_numpy(label).float(), torch.from_numpy(predict).float())
                 sum_ber += score
                 average_ber = sum_ber / (i + 1)
                 sum_accuracy += accuracy
