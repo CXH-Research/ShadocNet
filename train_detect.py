@@ -14,6 +14,7 @@ from config import Config
 from data import get_training_data, get_validation_data
 from torchvision.utils import save_image
 from model.detection import DDPM
+from evaluation.acc import eval_acc
 
 opt = Config('training.yml')
 
@@ -73,7 +74,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.BATCH_SIZE, sh
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_dice = 0
+best_acc = 0
 best_epoch = 1
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     epoch_start_time = time.time()
@@ -102,34 +103,27 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
 
         model.eval()
-        num_correct = 0
-        num_pixels = 0
         dice_score = 0
+        acc = 0
         with torch.no_grad():
             for i, data in enumerate(tqdm(val_loader), 0):
                 inp = data[0].cuda()
                 mas = data[2].cuda()
                 res = model(inp)
                 save_image(res, 'pred_mask.png')
-                preds = torch.sigmoid(res)
-                preds = (preds > 0.5).float()
-                num_correct += (preds == mas).sum()
-                num_pixels += torch.numel(preds)
-                dice_score += (2 * (preds * mas).sum()) / (
-                        (preds + mas).sum() + 1e-8
-                )
+                acc, dice_score = eval_acc(res, mas)
         print(
-            f"Got {num_correct}/{num_pixels} with acc {num_correct / num_pixels * 100:.2f}"
+            f"Got acc {acc:.2f}"
         )
-        print(f"Best epoch : {best_epoch}, Best dice score : {best_dice}")
-        if dice_score > best_dice:
-            best_dice = dice_score
+        if acc > best_acc:
+            best_acc = acc
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
                 'ddpm': model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "detect_best.pth"))
+        print(f"Best epoch : {best_epoch}, Best acc : {acc}")
 
     scheduler.step()
     print("------------------------------------------------------------------")
