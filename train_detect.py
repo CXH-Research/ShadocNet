@@ -14,7 +14,7 @@ from config import Config
 from data import get_training_data, get_validation_data
 from torchvision.utils import save_image
 from model.detection import DDPM
-from evaluation.acc import eval_acc
+from evaluation.ber import BER
 
 opt = Config('training.yml')
 
@@ -74,7 +74,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.BATCH_SIZE, sh
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_acc = 0
+best_ber = 100
 best_epoch = 1
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     epoch_start_time = time.time()
@@ -103,27 +103,31 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
 
         model.eval()
-        dice_score = 0
-        acc = 0
+        average_ber = 0.0
+        average_accuracy = 0.0
+        sum_ber = 0.0
+        sum_accuracy = 0.0
         with torch.no_grad():
             for i, data in enumerate(tqdm(val_loader), 0):
                 inp = data[0].cuda()
                 mas = data[2].cuda()
                 res = model(inp)
                 save_image(res, 'pred_mask.png')
-                acc, dice_score = eval_acc(res, mas)
-        print(
-            f"Got acc {acc:.2f}"
-        )
-        if acc > best_acc:
-            best_acc = acc
+                score, accuracy = BER(mas, res)
+                sum_ber += score
+                average_ber = sum_ber / (i + 1)
+                sum_accuracy += accuracy
+                average_accuracy = sum_accuracy / (i + 1)
+        print(f"Got BER {average_ber:.2f}, acc {average_accuracy:.2f}")
+        if average_ber < best_ber:
+            best_ber = average_ber
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
                 'ddpm': model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "detect_best.pth"))
-        print(f"Best epoch : {best_epoch}, Best acc : {best_acc}")
+        print(f"Best epoch : {best_epoch}, Best BER : {best_ber}")
 
     scheduler.step()
     print("------------------------------------------------------------------")
