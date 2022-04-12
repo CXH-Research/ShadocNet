@@ -304,7 +304,7 @@ class Downsample(nn.Module):
         # `t` is not used, but it's kept in the arguments because for the attention layer function signature
         # to match with `ResidualBlock`.
         _ = t
-        return self.conv2d(x)
+        return self.conv(x)
 
 
 class DDPM(nn.Module):
