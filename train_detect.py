@@ -123,7 +123,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
                 'ddpm': model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "detect_best.pth"))
-        print(f"Best epoch : {best_epoch}, Best acc : {acc}")
+        print(f"Best epoch : {best_epoch}, Best acc : {best_acc}")
 
     scheduler.step()
     print("------------------------------------------------------------------")
