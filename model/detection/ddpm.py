@@ -6,52 +6,6 @@ from torch import nn
 from torch.nn import functional as F
 
 
-@torch.no_grad()
-def variance_scaling_init_(tensor, scale=1, mode="fan_avg", distribution="uniform"):
-    fan_in, fan_out = nn.init._calculate_fan_in_and_fan_out(tensor)
-
-    if mode == "fan_in":
-        scale /= fan_in
-
-    elif mode == "fan_out":
-        scale /= fan_out
-
-    else:
-        scale /= (fan_in + fan_out) / 2
-
-    if distribution == "normal":
-        std = math.sqrt(scale)
-
-        return tensor.normal_(0, std)
-
-    else:
-        bound = math.sqrt(3 * scale)
-
-        return tensor.uniform_(-bound, bound)
-
-
-def conv2d(
-        in_channel,
-        out_channel,
-        kernel_size,
-        stride=1,
-        padding=0,
-        bias=True,
-        scale=1,
-        mode="fan_avg",
-):
-    conv = nn.Conv2d(
-        in_channel, out_channel, kernel_size, stride=stride, padding=padding, bias=bias
-    )
-
-    variance_scaling_init_(conv.weight, scale, mode=mode)
-
-    if bias:
-        nn.init.zeros_(conv.bias)
-
-    return conv
-
-
 class TimeEmbedding(nn.Module):
     """
     ### Embeddings for $t$
@@ -277,16 +231,14 @@ class Upsample(nn.Module):
 
     def __init__(self, n_channels):
         super().__init__()
-        self.up = nn.Sequential(
-            nn.Upsample(scale_factor=2, mode='nearest'),
-            conv2d(n_channels, n_channels, 3, padding=1)
-        )
+        self.conv = nn.ConvTranspose2d(n_channels, n_channels, 3, 1, 1)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
         # `t` is not used, but it's kept in the arguments because for the attention layer function signature
         # to match with `ResidualBlock`.
         _ = t
-        return self.up(x)
+        x = F.interpolate(x, scale_factor=2.0, mode='nearest')
+        return self.conv(x)
 
 
 class Downsample(nn.Module):
@@ -296,7 +248,7 @@ class Downsample(nn.Module):
 
     def __init__(self, n_channels):
         super().__init__()
-        self.conv = conv2d(n_channels, n_channels, 3, stride=2, padding=1)
+        self.conv = nn.Conv2d(n_channels, n_channels, 3, 2, 1)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
         # `t` is not used, but it's kept in the arguments because for the attention layer function signature
