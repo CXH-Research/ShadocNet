@@ -59,7 +59,6 @@ scheduler.step()
 
 # Loss #
 criterion_BCE = torch.nn.BCEWithLogitsLoss().cuda()
-criterion_L1 = torch.nn.L1Loss().cuda()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -93,7 +92,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # --- Forward + Backward + Optimize --- #
         pred = model(inp)
 
-        loss = criterion_BCE(pred, mas) + criterion_L1(pred, mas)
+        loss = criterion_BCE(pred, mas)
 
         loss.backward()
         optimizer.step()
