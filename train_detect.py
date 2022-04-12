@@ -13,6 +13,7 @@ from warmup_scheduler import GradualWarmupScheduler
 import utils
 from config import Config
 from data import get_training_data, get_validation_data
+from losses import dice_loss
 from torchvision.utils import save_image
 from model.detection import DDPM
 from model.detection import UNET
@@ -41,8 +42,8 @@ train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
-# model = DDPM().cuda()
-model = UNET().cuda()
+model = DDPM().cuda()
+# model = UNET().cuda()
 
 device_ids = [i for i in range(torch.cuda.device_count())]
 if torch.cuda.device_count() > 1:
@@ -61,7 +62,7 @@ scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_e
 scheduler.step()
 
 # Loss #
-criterion_BCE = torch.nn.BCEWithLogitsLoss().cuda()
+criterion_dice = dice_loss
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -95,7 +96,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # --- Forward + Backward + Optimize --- #
         pred = model(inp)
 
-        loss = criterion_BCE(pred, mas)
+        loss = criterion_dice(pred, mas)
 
         loss.backward()
         optimizer.step()
