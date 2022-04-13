@@ -12,17 +12,14 @@ import numpy as np
 import utils
 from data import get_training_data, get_validation_data
 from evaluation.removal import measure_all
-from model import SSCurveNet
-from model import squeezenet1_1
+from model import *
 from tqdm import tqdm
 import losses
 from warmup_scheduler import GradualWarmupScheduler
 
 opt = Config('training.yml')
 
-gpus = ','.join([str(i) for i in opt.GPU])
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = gpus
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Set Seeds #
 random.seed(1234)
@@ -46,14 +43,9 @@ train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
-# model = Model()
-# l_net = HWMNet()
-# l_net.cuda()
-# c_net = CMFNet()
-# c_net.cuda()
-sq = squeezenet1_1(pretrained=True)
-f_net = SSCurveNet(sq)
-f_net.cuda()
+f_net = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False).to(device)
+f_net.load_state_dict(torch.load('./pretrain_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
+f_net.to(device)
 
 device_ids = [i for i in range(torch.cuda.device_count())]
 if torch.cuda.device_count() > 1:
@@ -103,17 +95,17 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     # Train #
     f_net.train()
     for i, data in enumerate(tqdm(train_loader), 0):
-        inp = data[0].cuda()
-        tar = data[1].cuda()
-        mas = data[2].cuda()
+        inp = data[0].to(device)
+        tar = data[1].to(device)
+        mas = data[2].to(device)
         foremas = 1 - mas
 
         # --- Zero the parameter gradients --- #
         optimizer.zero_grad()
 
         # --- Forward + Backward + Optimize --- #
-        fore = torch.cat([inp, mas], dim=1).cuda()
-        feed = torch.cat([inp, foremas], dim=1).cuda()
+        fore = torch.cat([inp, mas], dim=1).to(device)
+        feed = torch.cat([inp, foremas], dim=1).to(device)
 
         out = f_net(feed, fore)[0]
 
@@ -129,10 +121,8 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
 
     # Evaluation #
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
-
-        models = [f_net]
-        rmse, mae, psnr, ssim = measure_all(models, val_loader)
-
+        f_net.eval()
+        rmse, mae, psnr, ssim = measure_all(f_net, val_loader)
         if rmse[2] < best_rmse:
             best_rmse = rmse[2]
             best_epoch = epoch

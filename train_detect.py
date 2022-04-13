@@ -15,7 +15,7 @@ from config import Config
 from data import get_training_data, get_validation_data
 from losses import dice_loss
 from torchvision.utils import save_image
-from model.detection import DDPM
+from model import DDPM
 from evaluation.ber import BER
 
 opt = Config('training.yml')

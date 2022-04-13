@@ -1,1 +1,2 @@
-from model.old.model import *
+from model.removal import *
+from model.detection import *

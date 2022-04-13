@@ -46,13 +46,11 @@ def SSIM(img1, img2):
     return ssim(img1, img2, data_range=1.0, multichannel=True)
 
 
-def measure_all(models, data_loader):
+def measure_all(model, data_loader):
     RMSEresult = []
     MAEresult = []
     PSNRresult = []
     SSIMresult = []
-    for model in models:
-        model.eval()
     for ii, data in enumerate(tqdm(data_loader), 0):
         inp = data[0].cuda()
         tar = data[1].cuda()
@@ -61,18 +59,18 @@ def measure_all(models, data_loader):
         with torch.no_grad():
             fore = torch.cat([inp, mas], dim=1).cuda()
             feed = torch.cat([inp, foremas], dim=1).cuda()
-            res = models[0](feed, fore)[0]
+            res = model(feed, fore)[0]
         save_image(res, 'res.png')
         save_image(tar, 'tar.png')
         save_image(mas, 'mas.png')
         output_img = Image.open('res.png')
         gt_img = Image.open('tar.png')
         mask_img = Image.open('mas.png')
-        # neww = 256
-        # newh = 256
-        # output_img = output_img.resize((neww, newh), Image.NEAREST)
-        # gt_img = gt_img.resize((neww, newh), Image.NEAREST)
-        # mask_img = mask_img.resize((neww, newh), Image.NEAREST)
+        neww = 256
+        newh = 256
+        output_img = output_img.resize((neww, newh), Image.NEAREST)
+        gt_img = gt_img.resize((neww, newh), Image.NEAREST)
+        mask_img = mask_img.resize((neww, newh), Image.NEAREST)
         output_img = np.array(output_img, 'f') / 255.
         gt_img = np.array(gt_img, 'f') / 255.
         mask_img = (np.array(mask_img, dtype=np.int32) / 255).astype(np.float32)
