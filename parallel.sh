@@ -1,0 +1,1 @@
+parallel -j1 -N0 python train_detect.py
