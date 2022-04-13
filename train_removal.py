@@ -13,7 +13,7 @@ import utils
 from data import get_training_data, get_validation_data
 from evaluation.removal import measure_all
 from model import SSCurveNet
-from model.unet import squeezenet1_1, CreateNetNeuralPointRender
+from model import squeezenet1_1
 from tqdm import tqdm
 import losses
 from warmup_scheduler import GradualWarmupScheduler
@@ -52,9 +52,7 @@ val_dir = opt.TRAINING.VAL_DIR
 # c_net = CMFNet()
 # c_net.cuda()
 sq = squeezenet1_1(pretrained=True)
-model = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False)
 f_net = SSCurveNet(sq)
-# f_net = model
 f_net.cuda()
 
 device_ids = [i for i in range(torch.cuda.device_count())]
@@ -101,7 +99,6 @@ best_epoch = 1
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     epoch_start_time = time.time()
     epoch_loss = 0
-    train_id = 1
 
     # Train #
     f_net.train()
