@@ -1,4 +1,4 @@
-GPU: [0]
+GPU: [0, 1]
 
 VERBOSE: True
 
