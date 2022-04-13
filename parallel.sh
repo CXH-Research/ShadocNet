@@ -1,1 +1,1 @@
-parallel -j1 -N0 python train_detect.py
+parallel -j1 -N0 python train_detect.py ::: {1..100}
