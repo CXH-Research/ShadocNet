@@ -1,5 +1,6 @@
 import os
 import random
+import sys
 import time
 
 import numpy as np
@@ -21,9 +22,8 @@ from evaluation.ber import BER
 
 opt = Config('training.yml')
 
-gpus = ','.join([str(i) for i in opt.GPU])
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = gpus
+device_id = sys.argv[1]
+os.environ['CUDA_VISIBLE_DEVICE'] = device_id
 
 # Set Seeds #
 random.seed(1234)
@@ -45,12 +45,7 @@ val_dir = opt.TRAINING.VAL_DIR
 # model = DDPM().cuda()
 model = UNET().cuda()
 
-device_ids = [i for i in range(torch.cuda.device_count())]
-if torch.cuda.device_count() > 1:
-    print("\n\nLet's use", torch.cuda.device_count(), "GPUs!\n\n")
-
 new_lr = opt.OPTIM.LR_INITIAL
-
 params = model.parameters()
 optimizer = optim.Adam(params, lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
 
