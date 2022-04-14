@@ -107,7 +107,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         fore = torch.cat([inp, mas], dim=1).to(device)
         feed = torch.cat([inp, foremas], dim=1).to(device)
 
-        out = f_net(inp, feed, fore)[0]
+        out = f_net(inp, feed, fore)
 
         loss_rl1 = criterion_rl1(out, tar, mas)
         loss_tv = criterion_tv(out)
