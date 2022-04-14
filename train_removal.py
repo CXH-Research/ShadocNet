@@ -44,7 +44,7 @@ val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
 f_net = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False).to(device)
-f_net.load_state_dict(torch.load('./pretrain_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
+f_net.load_state_dict(torch.load('./pretrained_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
 f_net.to(device)
 
 device_ids = [i for i in range(torch.cuda.device_count())]
