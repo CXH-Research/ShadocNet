@@ -59,7 +59,7 @@ def measure_all(model, data_loader):
         with torch.no_grad():
             fore = torch.cat([inp, mas], dim=1).cuda()
             feed = torch.cat([inp, foremas], dim=1).cuda()
-            res = model(feed, fore)[0]
+            res = model(inp, feed, fore)[0]
         save_image(res, 'res.png')
         save_image(tar, 'tar.png')
         save_image(mas, 'mas.png')
