@@ -43,8 +43,9 @@ train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
-f_net = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False).to(device)
-f_net.load_state_dict(torch.load('./pretrained_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
+# f_net = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False).to(device)
+# f_net.load_state_dict(torch.load('./pretrained_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
+f_net = SSCurveNet()
 f_net.to(device)
 
 device_ids = [i for i in range(torch.cuda.device_count())]
@@ -107,7 +108,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         fore = torch.cat([inp, mas], dim=1).to(device)
         feed = torch.cat([inp, foremas], dim=1).to(device)
 
-        out = f_net(inp, feed, fore)
+        out = f_net(feed, fore)[0]
 
         loss_rl1 = criterion_rl1(out, tar, mas)
         loss_tv = criterion_tv(out)
