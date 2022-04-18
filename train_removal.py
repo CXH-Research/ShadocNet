@@ -11,7 +11,7 @@ import numpy as np
 
 import utils
 from data import get_training_data, get_validation_data
-from evaluation.removal import measure_all
+from evaluation.removal import measure_rmse
 from model import *
 from tqdm import tqdm
 import losses
@@ -122,9 +122,9 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     # Evaluation #
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
         f_net.eval()
-        rmse, mae, psnr, ssim = measure_all(f_net, val_loader)
-        if rmse[2] < best_rmse:
-            best_rmse = rmse[2]
+        rmse = measure_rmse(f_net, val_loader)
+        if rmse < best_rmse:
+            best_rmse = rmse
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
@@ -132,7 +132,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "model_best.pth"))
 
-        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_RMSE %.4f]" % (epoch, rmse[2], best_epoch, best_rmse))
+        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_RMSE %.4f]" % (epoch, rmse, best_epoch, best_rmse))
 
     scheduler.step()
     print("------------------------------------------------------------------")
