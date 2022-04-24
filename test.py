@@ -9,7 +9,7 @@ from torchvision.utils import save_image
 import utils
 
 from data import get_test_data
-from model import HWMNet
+from model import *
 
 parser = argparse.ArgumentParser(description='Shadow Removal')
 
@@ -23,7 +23,7 @@ args = parser.parse_args()
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
-model = HWMNet()
+model = SSCurveNet()
 utils.load_checkpoint(model, args.weights)
 print("===>Testing using weights: ", args.weights)
 model.cuda()
@@ -49,9 +49,13 @@ for dataset in datasets:
             input_ = data_test[0].cuda()
             target = data_test[1].cuda()
             mask = data_test[2].cuda()
-            filenames = data_test[3][0]
+            filenames = data_test[3]
+            foremas = 1 - mask
 
-            restored = model_restoration(input_)[0]
+            fore = torch.cat([input_, mask], dim=1).cuda()
+            feed = torch.cat([input_, foremas], dim=1).cuda()
 
-            save_image(restored, os.path.join(result_dir, filenames + '.png'))
+            restored = model_restoration(feed, fore)[0] * mask + input_ * foremas
+
+            save_image(restored, os.path.join(result_dir, filenames[0] + '.png'))
 
