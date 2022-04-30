@@ -86,7 +86,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.BATCH_SIZE, sh
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_rmse = 3.5
+best_rmse = 3.8
 best_epoch = 1
 
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
