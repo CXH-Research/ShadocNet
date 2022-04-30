@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import torchvision
+from torch import nn
 from torchvision import models
 
 
@@ -174,3 +175,68 @@ def dice_loss(prediction, target):
     intersection = (i_flat * t_flat).sum()
 
     return 1 - ((2. * intersection + smooth) / (i_flat.sum() + t_flat.sum() + smooth))
+
+
+class WeightedL1Loss(nn.Module):
+    def __init__(self, alpha=1.0):
+        """
+            Note that input is between 0.0 (negative) and 1.0 (positive)
+            If alpha == 0.0, the loss is equal to L1.
+            Larger alpha emphasize the importance of positive labels
+        """
+        super().__init__()
+        assert alpha >= 0
+        self.alpha = alpha
+
+    def forward(self, output, target):
+        # The masks are mostly negative, so put more weight on positive masks
+        loss = torch.abs(output - target) * (1.0 + self.alpha * target)
+        return loss.mean()
+
+
+class WeightedCrossEntropyLoss(nn.Module):
+    """
+        Losses used in DSDNet
+        Distraction-aware Shadow Detection (CVPR2019)
+        https://quanlzheng.github.io/projects/Distraction-aware-Shadow-Detection.html
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.bc = nn.BCEWithLogitsLoss(reduction='none')
+
+    def forward(self, output, target):
+        # B, C, H, W = target.size()
+        # loss = self.bc(output, target)
+        # target = target.int()
+
+        # sample-wise weight
+        # pos_w = (target == 0).sum(dim=[1, 2, 3]).float() / (C * H * W)
+        # pos_w = pos_w.view(B, 1, 1, 1).repeat(1, C, H, W)
+        # neg_w = (target == 1).sum(dim=[1, 2, 3]).float() / (C * H * W)
+        # neg_w = neg_w.view(B, 1, 1, 1).repeat(1, C, H, W)
+        # w = torch.zeros_like(output)
+        # w[target == 0] = neg_w[target == 0]
+        # w[target == 1] = pos_w[target == 1]
+        # loss = (w * loss).mean()
+
+        # batch-wise weight
+        # pos_w = (target == 0).sum().float() / target.numel()
+        # neg_w = (target == 1).sum().float() / target.numel()
+        # w = torch.zeros_like(output)
+        # w[target == 0] = neg_w
+        # w[target == 1] = pos_w
+        # loss = (w * loss).mean()
+
+        # Following dsdnet
+        epsilon = 1e-10
+        # sigmoid_pred = torch.sigmoid(output)
+        count_pos = torch.sum(target) * 1.0 + epsilon
+        count_neg = torch.sum(1.0 - target) * 1.0
+        beta = count_neg / count_pos
+        beta_back = count_pos / (count_pos + count_neg)
+
+        bce1 = nn.BCEWithLogitsLoss(pos_weight=beta)
+        loss = beta_back * bce1(output, target)
+
+        return loss
