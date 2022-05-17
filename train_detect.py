@@ -15,7 +15,7 @@ from config import Config
 from data import get_training_data, get_validation_data
 from losses import dice_loss
 from torchvision.utils import save_image
-from model import DSDGenerator
+from model import *
 from evaluation.ber import BER
 
 opt = Config('detect.yml')
@@ -23,7 +23,6 @@ opt = Config('detect.yml')
 gpus = ','.join([str(i) for i in opt.GPU])
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = gpus
-
 
 # Set Seeds #
 random.seed(1234)
@@ -42,6 +41,36 @@ train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
+hr_config = {'NUM_CLASSES': 1, 'PRETRAINED': None, 'MODEL': {'EXTRA': {'FINAL_CONV_KERNEL': 1,
+                                                                       'STAGE1': {'BLOCK': 'BOTTLENECK',
+                                                                                  'FUSE_METHOD': 'SUM',
+                                                                                  'NUM_BLOCKS': [1],
+                                                                                  'NUM_CHANNELS': [32],
+                                                                                  'NUM_MODULES': 1,
+                                                                                  'NUM_RANCHES': 1
+                                                                                  },
+                                                                       'STAGE2': {'BLOCK': 'BASIC',
+                                                                                  'FUSE_METHOD': 'SUM',
+                                                                                  'NUM_BLOCKS': [2, 2],
+                                                                                  'NUM_BRANCHES': 2,
+                                                                                  'NUM_CHANNELS': [16, 32],
+                                                                                  'NUM_MODULES': 1
+                                                                                  },
+                                                                       'STAGE3': {'BLOCK': 'BASIC',
+                                                                                  'FUSE_METHOD': 'SUM',
+                                                                                  'NUM_BLOCKS': [2, 2, 2],
+                                                                                  'NUM_BRANCHES': 3,
+                                                                                  'NUM_CHANNELS': [16, 32, 64],
+                                                                                  'NUM_MODULES': 1
+                                                                                  },
+                                                                       'STAGE4': {'BLOCK': 'BASIC',
+                                                                                  'FUSE_METHOD': 'SUM',
+                                                                                  'NUM_BLOCKS': [2, 2, 2, 2],
+                                                                                  'NUM_BRANCHES': 4,
+                                                                                  'NUM_CHANNELS': [16, 32, 64, 128],
+                                                                                  'NUM_MODULES': 1
+                                                                                  }}}}
+# model = get_seg_model(hr_config).cuda()
 model = DSDGenerator().cuda()
 # model = UNET().cuda()
 device_ids = [i for i in range(torch.cuda.device_count())]
