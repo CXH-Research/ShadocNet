@@ -44,7 +44,7 @@ class AttentionModule(nn.Module):
 
 class DSDGenerator(nn.Module):
 
-    def __init__(self, opt):
+    def __init__(self):
         super().__init__()
         resnext = ResNeXt101()
         self.layer0 = resnext.layer0

@@ -15,7 +15,7 @@ from config import Config
 from data import get_training_data, get_validation_data
 from losses import dice_loss
 from torchvision.utils import save_image
-from model import DDPM
+from model import DSDGenerator
 from evaluation.ber import BER
 
 opt = Config('detect.yml')
@@ -42,7 +42,7 @@ train_dir = opt.TRAINING.TRAIN_DIR
 val_dir = opt.TRAINING.VAL_DIR
 
 # Model #
-model = DDPM().cuda()
+model = DSDGenerator().cuda()
 # model = UNET().cuda()
 device_ids = [i for i in range(torch.cuda.device_count())]
 if torch.cuda.device_count() > 1:
@@ -93,7 +93,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         optimizer.zero_grad()
 
         # --- Forward + Backward + Optimize --- #
-        pred = model(inp)
+        pred = model(inp)['attn']
 
         loss = criterion_bce(pred, mas)
 
@@ -113,7 +113,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
             for i, data in enumerate(tqdm(val_loader), 0):
                 inp = data[0].cuda()
                 mas = data[2].cuda()
-                res = model(inp)
+                res = model(inp)['attn']
                 save_image(res, 'pred_mask.png')
                 save_image(mas, 'gt_mask.png')
                 predict = cv2.imread('pred_mask.png', cv2.IMREAD_GRAYSCALE)
