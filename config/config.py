@@ -56,7 +56,8 @@ class Config(object):
         self._C.MODEL.SESSION = 'ps128_bs1'
 
         self._C.OPTIM = CN()
-        self._C.OPTIM.BATCH_SIZE = 1
+        self._C.OPTIM.TRAIN_BATCH_SIZE = 1
+        self._C.OPTIM.TEST_BATCH_SIZE = 1
         self._C.OPTIM.NUM_EPOCHS = 100
         self._C.OPTIM.NEPOCH_DECAY = [100]
         self._C.OPTIM.LR_INITIAL = 0.0002

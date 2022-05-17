@@ -75,11 +75,11 @@ criterion_cont = losses.ContrastLoss()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
-train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.BATCH_SIZE, shuffle=True, num_workers=16,
+train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.TRAIN_BATCH_SIZE, shuffle=True, num_workers=16,
                           drop_last=False, pin_memory=True)
 
 val_dataset = get_validation_data(val_dir, {'patch_size': opt.TRAINING.VAL_PS})
-val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.BATCH_SIZE, shuffle=False, num_workers=16,
+val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZE, shuffle=False, num_workers=16,
                         drop_last=False,
                         pin_memory=True)
 
