@@ -349,7 +349,7 @@ class DSDGenerator(nn.Module):
                 'pred_down3': pred_down3_shad, 'pred_down4': pred_down4_shad,
             }
         else:
-            return {torch.sigmoid(fuse_pred_shad)}
+            return {'attn': torch.sigmoid(fuse_pred_shad)}
             # if self.opt.det_loss_type in ['l1', 'wl1', 'l2']:
             #     return {'attn': torch.clamp(fuse_pred_shad, min=0.0, max=1.0)}
             # else:
