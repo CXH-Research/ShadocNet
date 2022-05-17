@@ -46,11 +46,11 @@ class DataLoaderTrain(Dataset):
         mask_img = Image.open(mask_path)
 
         inp_img = TF.to_tensor(inp_img)
-        inp_img = TF.resize(inp_img, [256, 256])
+        inp_img = TF.resize(inp_img, [572, 572])
         tar_img = TF.to_tensor(tar_img)
-        tar_img = TF.resize(tar_img, [256, 256])
+        tar_img = TF.resize(tar_img, [572, 572])
         mask_img = TF.to_tensor(mask_img)
-        mask_img = TF.resize(mask_img, [256, 256])
+        mask_img = TF.resize(mask_img, [572, 572])
 
         hh, ww = tar_img.shape[1], tar_img.shape[2]
 
@@ -133,11 +133,11 @@ class DataLoaderVal(Dataset):
         mask_img = Image.open(mask_path)
 
         inp_img = TF.to_tensor(inp_img)
-        inp_img = TF.resize(inp_img, [256, 256])
+        inp_img = TF.resize(inp_img, [572, 572])
         tar_img = TF.to_tensor(tar_img)
-        tar_img = TF.resize(tar_img, [256, 256])
+        tar_img = TF.resize(tar_img, [572, 572])
         mask_img = TF.to_tensor(mask_img)
-        mask_img = TF.resize(mask_img, [256, 256])
+        mask_img = TF.resize(mask_img, [572, 572])
 
         filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
 
@@ -175,11 +175,11 @@ class DataLoaderTest(Dataset):
         mask_img = Image.open(mask_path)
 
         inp_img = TF.to_tensor(inp_img)
-        inp_img = TF.resize(inp_img, [256, 256])
+        inp_img = TF.resize(inp_img, [572, 572])
         tar_img = TF.to_tensor(tar_img)
-        tar_img = TF.resize(tar_img, [256, 256])
+        tar_img = TF.resize(tar_img, [572, 572])
         mask_img = TF.to_tensor(mask_img)
-        mask_img = TF.resize(mask_img, [256, 256])
+        mask_img = TF.resize(mask_img, [572, 572])
 
         filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
 

@@ -8,8 +8,9 @@ from . import resnext_101_32x4d_
 
 class ResNeXt101(nn.Module):
     def __init__(self):
-        backbone_path = str(Path(__file__).parent / 'resnext_101_32x4d.pth')
+        # backbone_path = str(Path(__file__).parent / 'resnext_101_32x4d.pth')
         super(ResNeXt101, self).__init__()
+        backbone_path = None
         net = resnext_101_32x4d_.resnext_101_32x4d
         if backbone_path is not None:
             # The model is downloaded from:
