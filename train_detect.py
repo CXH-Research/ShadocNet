@@ -18,7 +18,7 @@ from torchvision.utils import save_image
 from model import DDPM
 from evaluation.ber import BER
 
-opt = Config('training.yml')
+opt = Config('detect.yml')
 
 gpus = ','.join([str(i) for i in opt.GPU])
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"

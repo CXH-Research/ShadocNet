@@ -1,4 +1,4 @@
-GPU: [0, 1]
+GPU: [0]
 
 VERBOSE: True
 
@@ -18,8 +18,8 @@ OPTIM:
 TRAINING:
   VAL_AFTER_EVERY: 1
   RESUME: False
-  TRAIN_PS: 256
-  VAL_PS: 256
+  TRAIN_PS: 572
+  VAL_PS: 572
   TRAIN_DIR: './dataset/RGB/train'       # path to training data
   VAL_DIR: './dataset/RGB/test' # path to validation data
 #  SAVE_DIR: './checkpoints'           # path to save models and images

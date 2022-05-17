@@ -17,7 +17,7 @@ from tqdm import tqdm
 import losses
 from warmup_scheduler import GradualWarmupScheduler
 
-opt = Config('training.yml')
+opt = Config('remove.yml')
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

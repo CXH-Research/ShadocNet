@@ -35,7 +35,6 @@ class DataLoaderTrain(Dataset):
 
     def __getitem__(self, index):
         index_ = index % self.sizex
-        ps = self.ps
 
         inp_path = self.inp_filenames[index_]
         tar_path = self.tar_filenames[index_]
@@ -46,22 +45,22 @@ class DataLoaderTrain(Dataset):
         mask_img = Image.open(mask_path)
 
         inp_img = TF.to_tensor(inp_img)
-        inp_img = TF.resize(inp_img, [572, 572])
+        inp_img = TF.resize(inp_img, [self.ps, self.ps])
         tar_img = TF.to_tensor(tar_img)
-        tar_img = TF.resize(tar_img, [572, 572])
+        tar_img = TF.resize(tar_img, [self.ps, self.ps])
         mask_img = TF.to_tensor(mask_img)
-        mask_img = TF.resize(mask_img, [572, 572])
+        mask_img = TF.resize(mask_img, [self.ps, self.ps])
 
         hh, ww = tar_img.shape[1], tar_img.shape[2]
 
-        rr = random.randint(0, hh - ps)
-        cc = random.randint(0, ww - ps)
+        rr = random.randint(0, hh - self.ps)
+        cc = random.randint(0, ww - self.ps)
         aug = random.randint(0, 8)
 
         # Crop patch
-        inp_img = inp_img[:, rr:rr + ps, cc:cc + ps]
-        tar_img = tar_img[:, rr:rr + ps, cc:cc + ps]
-        mask_img = mask_img[:, rr:rr + ps, cc:cc + ps]
+        inp_img = inp_img[:, rr:rr + self.ps, cc:cc + self.ps]
+        tar_img = tar_img[:, rr:rr + self.ps, cc:cc + self.ps]
+        mask_img = mask_img[:, rr:rr + self.ps, cc:cc + self.ps]
 
         # Data Augmentations
         if aug == 1:
@@ -133,11 +132,11 @@ class DataLoaderVal(Dataset):
         mask_img = Image.open(mask_path)
 
         inp_img = TF.to_tensor(inp_img)
-        inp_img = TF.resize(inp_img, [572, 572])
+        inp_img = TF.resize(inp_img, [self.ps, self.ps])
         tar_img = TF.to_tensor(tar_img)
-        tar_img = TF.resize(tar_img, [572, 572])
+        tar_img = TF.resize(tar_img, [self.ps, self.ps])
         mask_img = TF.to_tensor(mask_img)
-        mask_img = TF.resize(mask_img, [572, 572])
+        mask_img = TF.resize(mask_img, [self.ps, self.ps])
 
         filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
 
@@ -161,6 +160,7 @@ class DataLoaderTest(Dataset):
 
         self.img_options = img_options
         self.inp_size = len(self.tar_filenames)
+        self.ps = self.img_options['patch_size']
 
     def __len__(self):
         return self.inp_size
@@ -175,11 +175,11 @@ class DataLoaderTest(Dataset):
         mask_img = Image.open(mask_path)
 
         inp_img = TF.to_tensor(inp_img)
-        inp_img = TF.resize(inp_img, [572, 572])
+        inp_img = TF.resize(inp_img, [self.ps, self.ps])
         tar_img = TF.to_tensor(tar_img)
-        tar_img = TF.resize(tar_img, [572, 572])
+        tar_img = TF.resize(tar_img, [self.ps, self.ps])
         mask_img = TF.to_tensor(mask_img)
-        mask_img = TF.resize(mask_img, [572, 572])
+        mask_img = TF.resize(mask_img, [self.ps, self.ps])
 
         filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
 
