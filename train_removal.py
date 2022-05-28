@@ -129,7 +129,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
-                'f_net': f_net.state_dict(),
+                'state_dict': f_net.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "model_best.pth"))
 

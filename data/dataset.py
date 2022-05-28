@@ -160,7 +160,7 @@ class DataLoaderTest(Dataset):
 
         self.img_options = img_options
         self.inp_size = len(self.tar_filenames)
-        self.ps = self.img_options['patch_size']
+        # self.ps = self.img_options['patch_size']
 
     def __len__(self):
         return self.inp_size
@@ -175,11 +175,11 @@ class DataLoaderTest(Dataset):
         mask_img = Image.open(mask_path)
 
         inp_img = TF.to_tensor(inp_img)
-        inp_img = TF.resize(inp_img, [self.ps, self.ps])
+        # inp_img = TF.resize(inp_img, [self.ps, self.ps])
         tar_img = TF.to_tensor(tar_img)
-        tar_img = TF.resize(tar_img, [self.ps, self.ps])
+        # tar_img = TF.resize(tar_img, [self.ps, self.ps])
         mask_img = TF.to_tensor(mask_img)
-        mask_img = TF.resize(mask_img, [self.ps, self.ps])
+        # mask_img = TF.resize(mask_img, [self.ps, self.ps])
 
         filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
 
