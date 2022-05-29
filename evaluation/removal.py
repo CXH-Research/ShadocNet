@@ -4,8 +4,8 @@ import torch
 from torchvision.utils import save_image
 from tqdm import tqdm
 from skimage.color import rgb2lab
-from skimage.metrics import peak_signal_noise_ratio as psnr
-from skimage.metrics import structural_similarity as ssim
+from skimage.metrics import peak_signal_noise_ratio as compare_psnr
+from skimage.metrics import structural_similarity as compare_ssim
 from PIL import Image
 
 
@@ -37,14 +37,6 @@ def MAE(img1, img2, mask):
     whole_mae = diff.mean(axis=(0, 1))
 
     return np.sum(shadow_mae), np.sum(nonshadow_mae), np.sum(whole_mae)
-
-
-def PSNR(img1, img2):
-    return psnr(img1, img2, data_range=1.0)
-
-
-def SSIM(img1, img2):
-    return ssim(img1, img2, data_range=1.0, multichannel=True)
 
 
 # def measure_all(model, data_loader):
@@ -109,18 +101,48 @@ def rmse_lab(imtarget, imoutput, immask):
 
     return err_masked, num_of_mask
 
+def calc_psnr(sr, hr, dataset=None, scale=1, rgb_range=1):  
+    pred_batch = (sr.detach().permute(0, 2, 3, 1).cpu().numpy() * 255).astype(np.uint8)
+    gt_batch = (hr.detach().permute(0, 2, 3, 1).cpu().numpy() * 255).astype(np.uint8)
+    psnr = 0
+    ssim = 0
+    batch_size = sr.size(0)
+    for i in range(batch_size):
+        gt, pred = gt_batch[i], pred_batch[i]
+        psnr += compare_psnr(pred, gt, data_range=255)
+        ssim += compare_ssim(pred, gt, data_range=255, multichannel=True, win_size=11)
+    return psnr/batch_size
 
-def measure_rmse(model, data_loader):
+def calc_ssim(sr, hr, dataset=None, scale=1, rgb_range=1):  
+    pred_batch = (sr.detach().permute(0, 2, 3, 1).cpu().numpy() * 255).astype(np.uint8)
+    gt_batch = (hr.detach().permute(0, 2, 3, 1).cpu().numpy() * 255).astype(np.uint8)
+    psnr = 0
+    ssim = 0
+    batch_size = sr.size(0)
+    for i in range(batch_size):
+        gt, pred = gt_batch[i], pred_batch[i]
+        ssim += compare_ssim(pred, gt, data_range=255, multichannel=True, win_size=11)
+    return ssim/batch_size
+
+
+def measure_all(detect, remove, data_loader):
+    running_ssim = 0
+    running_psnr = 0
+
     err_m, err_nm, err_a, total_mask, total_nonmask, total_all, cntx = 0., 0., 0., 0., 0., 0., 0.
     for ii, data in enumerate(tqdm(data_loader), 0):
         inp = data[0].cuda()
         tar = data[1].cuda()
-        mas = data[2].cuda()
+        # mas = data[2].cuda()
+        mas = detect(inp)['attn']
         foremas = 1 - mas
         with torch.no_grad():
             fore = torch.cat([inp, mas], dim=1).cuda()
             feed = torch.cat([inp, foremas], dim=1).cuda()
-            res = model(feed, fore)[0]  * mas + inp * (1 - mas)
+            res = remove(feed, fore)[0]  * mas + inp * (1 - mas)
+            running_ssim += calc_ssim(res, tar)
+            running_psnr += calc_psnr(res, tar)
+
         save_image(res, 'res.png')
         save_image(tar, 'tar.png')
         save_image(mas, 'mas.png')
@@ -146,7 +168,12 @@ def measure_rmse(model, data_loader):
     RMSE_NS = err_nm / total_nonmask
     RMSE_S = err_m / total_mask
     RMSE_ALL = err_a / total_all
-
+    PSNR = running_psnr / len(data_loader)
+    SSIM = running_ssim / len(data_loader)
     print("== RMSE ==")
     print("shadow: {0:.2f}, Non-shadow:{1:.2f}, All: {2:.2f}".format(RMSE_S, RMSE_NS, RMSE_ALL))
-    return RMSE_ALL
+    print("== PSNR ==")
+    print("All: {0:.2f}".format(PSNR))
+    print("== SSIM ==")
+    print("All: {0:.2f}".format(SSIM))
+    return RMSE_ALL, PSNR, SSIM

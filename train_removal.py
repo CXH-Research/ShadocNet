@@ -11,7 +11,7 @@ import numpy as np
 
 import utils
 from data import get_training_data, get_validation_data
-from evaluation.removal import measure_rmse
+from evaluation.removal import measure_all
 from model import *
 from tqdm import tqdm
 import losses
@@ -45,16 +45,15 @@ val_dir = opt.TRAINING.VAL_DIR
 # Model #
 # f_net = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False).to(device)
 # f_net.load_state_dict(torch.load('./pretrained_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
-f_net = SSCurveNet()
-f_net.to(device)
+remove = SSCurveNet()
+detect = DSDGenerator().cuda()
+detect.eval()
+remove.to(device)
 
-device_ids = [i for i in range(torch.cuda.device_count())]
-if torch.cuda.device_count() > 1:
-    print("\n\nLet's use", torch.cuda.device_count(), "GPUs!\n\n")
 
 new_lr = opt.OPTIM.LR_INITIAL
 
-params = list(f_net.parameters())
+params = list(remove.parameters())
 optimizer = optim.Adam(params, lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
 
 # Scheduler #
@@ -86,7 +85,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZ
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_rmse = 3.8
+best_rmse = 10000
 best_epoch = 1
 
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
@@ -94,11 +93,12 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     epoch_loss = 0
 
     # Train #
-    f_net.train()
+    remove.train()
     for i, data in enumerate(tqdm(train_loader), 0):
         inp = data[0].to(device)
         tar = data[1].to(device)
-        mas = data[2].to(device)
+        mas = detect(inp)['attn']
+        # mas = data[2].to(device)
         foremas = 1 - mas
 
         # --- Zero the parameter gradients --- #
@@ -108,7 +108,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         fore = torch.cat([inp, mas], dim=1).to(device)
         feed = torch.cat([inp, foremas], dim=1).to(device)
 
-        out = f_net(feed, fore)[0] * mas + inp * (1 - mas)
+        out = remove(feed, fore)[0] * mas + inp * (1 - mas)
 
         loss_rl1 = criterion_rl1(out, tar, mas)
         loss_tv = criterion_tv(out)
@@ -122,14 +122,14 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
 
     # Evaluation #
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
-        f_net.eval()
-        rmse = measure_rmse(f_net, val_loader)
+        remove.eval()
+        rmse, psnr, ssim = measure_all(detect, remove, val_loader)
         if rmse < best_rmse:
             best_rmse = rmse
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
-                'state_dict': f_net.state_dict(),
+                'state_dict': remove.state_dict(),
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "model_best.pth"))
 
