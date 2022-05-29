@@ -47,6 +47,7 @@ val_dir = opt.TRAINING.VAL_DIR
 # f_net.load_state_dict(torch.load('./pretrained_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
 remove = SSCurveNet()
 detect = DSDGenerator().cuda()
+detect.load_state_dict(torch.load('./pretrained_models/detect_best.pth'))
 detect.eval()
 remove.to(device)
 
