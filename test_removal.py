@@ -29,12 +29,15 @@ print("===>Testing using weights: ", args.weights)
 model.cuda()
 model_restoration = nn.DataParallel(model)
 model_restoration.eval()
+detect = DSDGenerator().cuda()
+detect.load_state_dict(torch.load('./pretrained_models/detect_best.pth')['state_dict'])
+detect.eval()
 
-datasets = ['ISTD+']
+datasets = ['RGB', 'Jung', 'Kligler']
 
 for dataset in datasets:
     dir_test = os.path.join(args.input_dir, dataset, 'test')
-    test_dataset = get_test_data(dir_test, img_options={})
+    test_dataset = get_test_data(dir_test, img_options={'patch_size': 512})
     test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False, num_workers=16, drop_last=False,
                              pin_memory=True)
 
@@ -48,14 +51,15 @@ for dataset in datasets:
 
             input_ = data_test[0].cuda()
             target = data_test[1].cuda()
-            mask = data_test[2].cuda()
+            # mask = data_test[2].cuda()
+            mask = detect(input_)['attn']
             filenames = data_test[3]
             foremas = 1 - mask
 
             fore = torch.cat([input_, mask], dim=1).cuda()
             feed = torch.cat([input_, foremas], dim=1).cuda()
 
-            restored = model_restoration(feed, fore)[0] * mask + input_ * foremas
+            restored = model_restoration(feed, fore)[0] * mask + model_restoration(fore, feed)[0] * foremas
 
             save_image(restored, os.path.join(result_dir, filenames[0] + '.png'))
 
