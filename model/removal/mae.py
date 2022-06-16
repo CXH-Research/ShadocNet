@@ -51,7 +51,7 @@ class MAE(nn.Module):
         masked_patches, _ = self.shuffler.shuffle_split(patches)
 
         img_recon = self.shuffler.unshuffle(pixel_recon)
-        img_recon = rearrange('(h w) b (s1 s2 c) -> b c (h s1) (w s2)', h=img.shape[2] // self.patch_size,
+        img_recon = rearrange(img_recon, '(h w) b (s1 s2 c) -> b c (h s1) (w s2)', h=img.shape[2] // self.patch_size,
                               s1=self.patch_size, s2=self.patch_size)
 
         return img_recon
