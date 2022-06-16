@@ -102,10 +102,10 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         optimizer.zero_grad()
 
         # --- Forward + Backward + Optimize --- #
-        fore = torch.cat([inp, mas], dim=1).to(device)
-        feed = torch.cat([inp, foremas], dim=1).to(device)
+        # fore = torch.cat([inp, mas], dim=1).to(device)
+        # feed = torch.cat([inp, foremas], dim=1).to(device)
 
-        out = remove(feed, fore, mas, foremas)
+        out = remove(inp, mas, foremas)
 
         loss_rl1_1 = criterion_rl1(out, tar, mas)
         loss_rl1_2 = criterion_rl1(out, tar, foremas)
