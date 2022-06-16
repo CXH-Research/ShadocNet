@@ -139,7 +139,7 @@ def measure_all(detect, remove, data_loader):
         with torch.no_grad():
             fore = torch.cat([inp, mas], dim=1).cuda()
             feed = torch.cat([inp, foremas], dim=1).cuda()
-            res = remove(feed, fore)[0]  * mas + remove(fore, feed)[0] * foremas
+            res = remove(feed, fore, mas, foremas)
             running_ssim += calc_ssim(res, tar)
             running_psnr += calc_psnr(res, tar)
 

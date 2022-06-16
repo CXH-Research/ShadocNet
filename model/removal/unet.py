@@ -993,7 +993,7 @@ class ResMLP(nn.Module):
 
 
 class CreateNetNeuralPointRender(nn.Module):
-    def __init__(self, backbone='squeezenet', plane=64, ic=3, stage=2, resmlp=True, act=nn.ReLU, res=False,
+    def __init__(self, backbone='squeezenet', plane=64, ic=3, stage=2, resmlp=False, act=nn.ReLU, res=False,
                  use_fcb=True, use_norm=False):
         super(CreateNetNeuralPointRender, self).__init__()
 
@@ -1001,8 +1001,8 @@ class CreateNetNeuralPointRender(nn.Module):
 
         if self.backbone == 'squeezenet':
             model = squeezenet1_1(pretrained=False)
-            model.load_state_dict(
-                torch.load('./pretrained_models/squeezenet1_1-b8a52dc0.pth'))
+            # model.load_state_dict(
+            #     torch.load('./pretrained_models/squeezenet1_1-b8a52dc0.pth'))
             self.backbone = nn.Sequential(*list(model.children())[0][:12])
             self.feature_dim = 512
 

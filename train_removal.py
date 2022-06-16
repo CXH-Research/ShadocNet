@@ -66,12 +66,8 @@ scheduler.step()
 
 # Loss #
 criterion_rl1 = losses.l1_relative
-criterion_l1 = torch.nn.L1Loss()
-criterion_char = losses.CharbonnierLoss()
-criterion_edge = losses.EdgeLoss()
 criterion_perc = losses.Perceptual()
 criterion_tv = losses.total_variation_loss
-criterion_cont = losses.ContrastLoss()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -109,13 +105,14 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         fore = torch.cat([inp, mas], dim=1).to(device)
         feed = torch.cat([inp, foremas], dim=1).to(device)
 
-        out = remove(feed, fore)[0] * mas + remove(fore, feed)[0] * foremas
+        out = remove(feed, fore, mas, foremas)
 
-        loss_rl1 = criterion_rl1(out, tar, mas)
+        loss_rl1_1 = criterion_rl1(out, tar, mas)
+        loss_rl1_2 = criterion_rl1(out, tar, foremas)
         loss_tv = criterion_tv(out)
         loss_perc = criterion_perc(out, tar)
 
-        loss = loss_rl1 + 0.02 * loss_tv + 0.04 * loss_perc
+        loss = loss_rl1_1 + loss_rl1_2 + 0.02 * loss_tv + 0.04 * loss_perc
 
         loss.backward()
         optimizer.step()
