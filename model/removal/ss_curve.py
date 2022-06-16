@@ -114,8 +114,7 @@ class Decoder(nn.Module):
 
 
 class SSCurveNet(nn.Module):
-    def __init__(self, model=squeezenet1_1(pretrained=True), plane=64, fusion=SimpleFusion, final_relu=False,
-                 stack=False, cr1=ColorCurveRender,
+    def __init__(self, model=squeezenet1_1(pretrained=False), plane=64, fusion=SimpleFusion, final_relu=False, stack=False, cr1=ColorCurveRender,
                  cr2=ColorCurveRender):
         super(SSCurveNet, self).__init__()
         self.squeezenet1_1 = nn.Sequential(*list(model.children())[0][:12])

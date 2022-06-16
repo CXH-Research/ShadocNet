@@ -133,22 +133,22 @@ def measure_all(detect, remove, data_loader):
     for ii, data in enumerate(tqdm(data_loader), 0):
         inp = data[0].cuda()
         tar = data[1].cuda()
-        # mas = data[2].cuda()
+        gt_mas = data[2].cuda()
         mas = detect(inp)['attn']
         foremas = 1 - mas
         with torch.no_grad():
             fore = torch.cat([inp, mas], dim=1).cuda()
             feed = torch.cat([inp, foremas], dim=1).cuda()
-            res = remove(feed, fore)[0]  * mas + inp * (1 - mas)
+            res = remove(feed, fore)[0]  * mas + remove(fore, feed)[0] * foremas
             running_ssim += calc_ssim(res, tar)
             running_psnr += calc_psnr(res, tar)
 
         save_image(res, 'res.png')
         save_image(tar, 'tar.png')
-        save_image(mas, 'mas.png')
+        save_image(gt_mas, 'mas.png')
         imoutput = cv2.imread('res.png')
-        imtarget = cv2.imread('tar.png')
-        immask = cv2.imread('mas.png')
+        imtarget = cv2.imread('tar.png') 
+        immask = cv2.imread('mas.png') 
 
         immask = immask[:, :, 0:1]
 
