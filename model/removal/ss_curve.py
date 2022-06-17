@@ -10,7 +10,7 @@ class SSCurveNet(nn.Module):
         super(SSCurveNet, self).__init__()
         # self.squeezenet1_1 = nn.Sequential(*list(model.children())[0][:12])
         self.fusion = CreateNetNeuralPointRender()
-        self.mae = getattr(mae, 'mae_vit_large_patch16')()
+        self.mae = getattr(mae, 'mae_pvt_small_256')()
         # self.mae = MAE(image_size=512,
         #                image_channel=3,
         #                patch_size=16,
@@ -44,15 +44,7 @@ class SSCurveNet(nn.Module):
         foreground = inp * mas
         background = inp * foremas
 
-        loss, y, mask = self.mae(foreground.float(), mask_ratio=0.75)
-        y = self.mae.unpatchify(y)
-        y = torch.einsum('nchw->nhwc', y).detach().cpu()
-
-        mask = mask.detach()
-        mask = mask.unsqueeze(-1).repeat(1, 1, self.mae.patch_embed.patch_size[0] ** 2 * 3)  # (N, H*W, p*p*3)
-        mask = self.mae.unpatchify(mask)  # 1 is removing, 0 is keeping
-        mask = torch.einsum('nchw->nhwc', mask).detach().cpu()
-
+        loss, pred, mask = self.mae(foreground, mas)
         exit()
 
         foreground_mae = self.mae(foreground)
