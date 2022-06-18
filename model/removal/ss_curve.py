@@ -1,7 +1,8 @@
 from . import mae
 from .unet import *
 from .mae import *
-
+from .maeutil import *
+import numpy as np
 
 class SSCurveNet(nn.Module):
     def __init__(self, model=squeezenet1_1(pretrained=False), plane=64, fusion=SimpleFusion, final_relu=False,
@@ -10,7 +11,36 @@ class SSCurveNet(nn.Module):
         super(SSCurveNet, self).__init__()
         # self.squeezenet1_1 = nn.Sequential(*list(model.children())[0][:12])
         self.fusion = CreateNetNeuralPointRender()
-        self.mae = getattr(mae, 'mae_pvt_small_256')()
+        DOMAIN_CONF = {
+            'rgb': {
+                'input_adapter': partial(PatchedInputAdapter, num_channels=3, stride_level=1),
+                'output_adapter': partial(SpatialOutputAdapter, num_channels=3, stride_level=1),
+            }
+        }
+        DOMAINS = ['rgb']
+
+        input_adapters = {
+            domain: dinfo['input_adapter'](
+                patch_size_full=16,
+            )
+            for domain, dinfo in DOMAIN_CONF.items()
+        }
+        output_adapters = {
+            domain: dinfo['output_adapter'](
+                patch_size_full=16,
+                dim_tokens=256,
+                use_task_queries=True,
+                depth=2,
+                context_tasks=DOMAINS,
+                task=domain
+            )
+            for domain, dinfo in DOMAIN_CONF.items()
+        }
+
+        self.multimae = pretrain_multimae_base(
+            input_adapters=input_adapters,
+            output_adapters=output_adapters,
+        )
         # self.mae = MAE(image_size=512,
         #                image_channel=3,
         #                patch_size=16,
@@ -44,11 +74,39 @@ class SSCurveNet(nn.Module):
         foreground = inp * mas
         background = inp * foremas
 
-        loss, pred, mask = self.mae(foreground, mas)
-        exit()
+        input_dict = {}
+        input_dict['rgb'] = inp
 
-        foreground_mae = self.mae(foreground)
-        background_mae = self.mae(background)
+        mask = {}
+
+        mask['rgb'] = np.array([
+            [0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1],
+            [0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1],
+            [0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
+            [1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1],
+            [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1],
+            [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1],
+            [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0],
+            [1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1],
+            [1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0],
+            [1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0],
+            [1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0],
+            [1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1],
+            [1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1]
+        ])
+
+        task_masks = {k: torch.LongTensor(v).flatten()[None].cuda() for k, v in mask.items()}
+        preds, masks = self.multimae.forward(
+            input_dict,
+            mask_inputs=True,
+            task_masks=task_masks
+        )
+
+        preds = {domain: pred.detach().cpu() for domain, pred in preds.items()}
+        masks = {domain: mask.detach().cpu() for domain, mask in masks.items()}
+
+        exit()
 
         feed = torch.cat([foreground_mae, mas], dim=1).cuda()
         fore = torch.cat([background_mae, foremas], dim=1).cuda()

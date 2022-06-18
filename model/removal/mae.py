@@ -1,465 +1,508 @@
+import itertools
+from collections import OrderedDict
+from typing import Dict, Iterable, List
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import math
-import numpy as np
-from functools import partial
-from timm.models.vision_transformer import Block
-from timm.models.layers import DropPath, to_2tuple
-from einops import rearrange
+from einops import repeat
+from torch.distributions.dirichlet import Dirichlet
+
+from .maeutil import *
 
 
-def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
-    """
-    grid_size: int of the grid height and width
-    return:
-    pos_embed: [grid_size*grid_size, embed_dim] or [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
-    """
-    grid_h = np.arange(grid_size, dtype=np.float32)
-    grid_w = np.arange(grid_size, dtype=np.float32)
-    grid = np.meshgrid(grid_w, grid_h)  # here w goes first
-    grid = np.stack(grid, axis=0)
-
-    grid = grid.reshape([2, 1, grid_size, grid_size])
-    pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
-    if cls_token:
-        pos_embed = np.concatenate([np.zeros([1, embed_dim]), pos_embed], axis=0)
-    return pos_embed
 
 
-def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
-    assert embed_dim % 2 == 0
 
-    # use half of dimensions to encode grid_h
-    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
-    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
-
-    emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
-    return emb
-
-
-def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
-    """
-    embed_dim: output dimension for each position
-    pos: a list of positions to be encoded: size (M,)
-    out: (M, D)
-    """
-    assert embed_dim % 2 == 0
-    omega = np.arange(embed_dim // 2, dtype=np.float)
-    omega /= embed_dim / 2.
-    omega = 1. / 10000 ** omega  # (D/2,)
-
-    pos = pos.reshape(-1)  # (M,)
-    out = np.einsum('m,d->md', pos, omega)  # (M, D/2), outer product
-
-    emb_sin = np.sin(out)  # (M, D/2)
-    emb_cos = np.cos(out)  # (M, D/2)
-
-    emb = np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
-    return
-
-
-class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
-        self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
-        self.drop = nn.Dropout(drop)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        x = self.fc2(x)
-        x = self.drop(x)
-        return x
-
-
-class Attention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, sr_ratio=1):
-        super().__init__()
-        assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
-
-        self.dim = dim
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
-
-        self.q = nn.Linear(dim, dim, bias=qkv_bias)
-        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
-        self.proj = nn.Linear(dim, dim)
-
-        self.sr_ratio = sr_ratio
-
-        self.sr = nn.Conv2d(dim, dim, kernel_size=1)
-        self.norm = nn.LayerNorm(dim)
-
-    def forward(self, x, H, W):
-        B, N, C = x.shape
-        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
-
-        x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
-        x_ = F.avg_pool2d(x_, self.sr_ratio)
-        x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
-        x_ = self.norm(x_)
-        kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        k, v = kv[0], kv[1]
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-
-        return x
-
-
-class PVTBlock(nn.Module):
-    def __init__(self, dim, num_heads, sr_ratio, mlp_ratio=4., qkv_bias=True, qk_scale=None,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, downsample=None):
-        super().__init__()
-        self.norm1 = norm_layer(dim)
-        self.attn = Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, sr_ratio=sr_ratio)
-        # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer)
-
-        self.downsample = downsample
-
-    def forward(self, x, H, W):
-        if self.downsample:
-            x, (H, W) = self.downsample(x, H, W)
-        x = x + self.drop_path(self.attn(self.norm1(x), H, W))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
-        return x, (H, W)
-
-
-class PatchMerge(nn.Module):
-    def __init__(self, patch_size=4, in_chans=3, embed_dim=96):
-        super().__init__()
-        patch_size = to_2tuple(patch_size)
-        self.patch_size = patch_size
-
-        self.in_chans = in_chans
-        self.embed_dim = embed_dim
-
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-
-    def forward(self, x, H, W):
-        N, L, C = x.shape
-        assert L == H * W
-        x = x.permute(0, 2, 1).reshape(N, C, H, W)
-        # FIXME look at relaxing size constraints
-        x = self.proj(x).flatten(2).transpose(1, 2)  # B Ph*Pw C
-        H, W = H // self.patch_size[0], W // self.patch_size[1]
-        return x, (H, W)
-
-
-class PatchEmbed(nn.Module):
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, embed_dim=96):
-        super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        patches_resolution = [img_size[0] // patch_size[0], img_size[1] // patch_size[1]]
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.patches_resolution = patches_resolution
-        self.num_patches = patches_resolution[0] * patches_resolution[1]
-
-        self.in_chans = in_chans
-        self.embed_dim = embed_dim
-
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-
-    def forward(self, x):
-        B, C, H, W = x.shape
-        # FIXME look at relaxing size constraints
-        x = self.proj(x).flatten(2).transpose(1, 2)  # B Ph*Pw C
-        return x
-
-
-class MaskedAutoencoderPVT(nn.Module):
-    """ Masked Autoencoder with PVT backbone
+class MultiMAE(nn.Module):
+    """MultiMAE: Multi-task Multi-modal Masked Autoencoder
+    This module performs masking in its forward pass.
+    The MultiViT module defined below inherits from this module and performs a regular forward pass,
+    and should be used instead for downstream tasks
+    :param input_adapters: Dictionary of task -> input adapters
+    :param output_adapters: Optional dictionary of task -> output adapters
+    :param num_global_tokens: Number of additional global tokens to add (like cls tokens), default is 1
+    :param dim_tokens: Dimension of encoder tokens
+    :param depth: Depth of encoder
+    :param num_heads: Number of attention heads
+    :param mlp_ratio: MLP hidden dim ratio
+    :param qkv_bias: Set to False to disable bias
+    :param drop_rate: Dropout after MLPs and Attention
+    :param attn_drop_rate: Attention matrix drop rate
+    :param drop_path_rate: DropPath drop rate
+    :param norm_layer: Type of normalization layer
     """
 
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, stride=16,
-                 embed_dims=[64, 128, 320, 512], depths=[3, 4, 6, 3], num_heads=[1, 2, 5, 8],
-                 mlp_ratios=[8, 8, 4, 4], sr_ratios=[4, 2, 1, 1],  # [8, 4, 2, 1] for finetune
-                 decoder_embed_dim=512, decoder_depth=2, decoder_num_heads=16,
-                 decoder_mlp_ratio=4, norm_layer=nn.LayerNorm, norm_pix_loss=False,
-                 vis_mask_ratio=0.):
+    def __init__(self,
+                 input_adapters: Dict[str, nn.Module],
+                 output_adapters: Optional[Dict[str, nn.Module]],
+                 num_global_tokens: int = 1,
+                 dim_tokens: int = 768,
+                 depth: int = 12,
+                 num_heads: int = 12,
+                 mlp_ratio: float = 4.0,
+                 qkv_bias: bool = True,
+                 drop_rate: float = 0.0,
+                 attn_drop_rate: float = 0.0,
+                 drop_path_rate: float = 0.0,
+                 norm_layer: nn.Module = partial(nn.LayerNorm, eps=1e-6)):
         super().__init__()
 
-        self.embed_dims = embed_dims
-        self.stride = stride
-        self.kernel_stride = stride // patch_size
+        # Initialize input and output adapters
+        for adapter in input_adapters.values():
+            adapter.init(dim_tokens=dim_tokens)
+        self.input_adapters = nn.ModuleDict(input_adapters)
+        if output_adapters is not None:
+            for adapter in output_adapters.values():
+                adapter.init(dim_tokens_enc=dim_tokens)
+            self.output_adapters = nn.ModuleDict(output_adapters)
+        else:
+            self.output_adapters = None
 
-        self.vis_mask_ratio = vis_mask_ratio
-        if vis_mask_ratio > 0:
-            self.vis_mask_token = nn.Parameter(torch.zeros(1, 1, embed_dims[0]))
-            print('vis_mask_token is learnable')
+        # Additional learnable tokens that can be used by encoder to process/store global information
+        self.num_global_tokens = num_global_tokens
+        self.global_tokens = nn.Parameter(torch.zeros(1, num_global_tokens, dim_tokens))
+        trunc_normal_(self.global_tokens, std=0.02)
 
-        # --------------------------------------------------------------------------
-        # MAE encoder specifics
-        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dims[0])
-        num_patches = self.patch_embed.num_patches
+        # Transformer encoder
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        self.encoder = nn.Sequential(*[
+            Block(dim=dim_tokens, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
+                  drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
+            for i in range(depth)
+        ])
 
-        self.embed_h = self.embed_w = int(self.patch_embed.num_patches ** 0.5)
-        self.patches_resolution = self.patch_embed.patches_resolution
-        self.num_layers = len(depths)
-
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dims[0]),
-                                      requires_grad=False)  # fixed sin-cos embedding
-        self.kernel = torch.ones(embed_dims[0], 1, 2, 2)
-
-        self.blocks = nn.ModuleList()
-        for i_layer in range(self.num_layers):
-            for dep in range(depths[i_layer]):
-                downsample_flag = (i_layer > 0) and (dep == 0)
-                layer = PVTBlock(dim=embed_dims[i_layer],
-                                 num_heads=num_heads[i_layer],
-                                 sr_ratio=sr_ratios[i_layer],
-                                 mlp_ratio=mlp_ratios[i_layer],
-                                 qkv_bias=True, qk_scale=None,
-                                 drop_path=0.,
-                                 downsample=PatchMerge(
-                                     patch_size=2,  # if i_layer < self.num_layers - 1 else 1,
-                                     in_chans=embed_dims[i_layer - 1],
-                                     embed_dim=embed_dims[i_layer]
-                                 ) if downsample_flag else None
-                                 )
-                self.blocks.append(layer)
-        self.norm = norm_layer(embed_dims[-1])
-        # --------------------------------------------------------------------------
-
-        # --------------------------------------------------------------------------
-        # MAE decoder specifics
-        self.decoder_embed_dim = decoder_embed_dim
-        self.decoder_embed = nn.Linear(embed_dims[-1], 4 * decoder_embed_dim, bias=True)
-        self.decoder_expand = nn.PixelShuffle(2)
-
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
-
-        self.decoder_num_patches = (img_size // stride) ** 2
-        self.decoder_pos_embed = nn.Parameter(torch.zeros(1, self.decoder_num_patches, decoder_embed_dim),
-                                              requires_grad=False)
-
-        self.decoder_blocks = nn.ModuleList([
-            Block(decoder_embed_dim, decoder_num_heads, decoder_mlp_ratio, qkv_bias=True, qk_scale=None,
-                  norm_layer=norm_layer)
-            for i in range(decoder_depth)])
-
-        self.decoder_norm = norm_layer(decoder_embed_dim)
-        self.decoder_pred = nn.Linear(decoder_embed_dim, stride ** 2 * in_chans, bias=True)  # decoder to patch
-        # --------------------------------------------------------------------------
-
-        self.norm_pix_loss = norm_pix_loss
-
-        self.initialize_weights()
-
-    def initialize_weights(self):
-        # initialization
-        # initialize (and freeze) pos_embed by sin-cos embedding
-        pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.patch_embed.num_patches ** .5),
-                                            cls_token=False)
-        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
-
-        decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1],
-                                                    int(self.decoder_num_patches ** .5), cls_token=False)
-        self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
-
-        # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
-        torch.nn.init.normal_(self.mask_token, std=.02)
-        if hasattr(self, 'vis_mask_token'):
-            torch.nn.init.normal_(self.vis_mask_token, std=.02)
-
-        # initialize nn.Linear and nn.LayerNorm
         self.apply(self._init_weights)
+        for name, m in self.named_modules():
+            if isinstance(m, nn.Linear):
+                if 'qkv' in name:
+                    # treat the weights of Q, K, V separately
+                    val = math.sqrt(6. / float(m.weight.shape[0] // 3 + m.weight.shape[1]))
+                    nn.init.uniform_(m.weight, -val, val)
+                elif 'kv' in name:
+                    # treat the weights of K, V separately
+                    val = math.sqrt(6. / float(m.weight.shape[0] // 2 + m.weight.shape[1]))
+                    nn.init.uniform_(m.weight, -val, val)
 
-        # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-        w = self.patch_embed.proj.weight.data
-        torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+            if isinstance(m, nn.Conv2d):
+                if '.proj' in name:
+                    # From MAE, initialize projection like nn.Linear (instead of nn.Conv2d)
+                    w = m.weight.data
+                    nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            # we use xavier_uniform following official JAX ViT:
-            torch.nn.init.xavier_uniform_(m.weight)
+            nn.init.xavier_uniform_(m.weight)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
-        elif isinstance(m, nn.Conv2d):
-            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-            fan_out //= m.groups
-            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-            if m.bias is not None:
-                m.bias.data.zero_()
 
-    def unpatchify(self, x, stride=16):
+    def get_num_layers(self):
+        return len(self.encoder)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        no_wd_set = {'global_tokens'}
+
+        for task, adapter in self.input_adapters.items():
+            if hasattr(adapter, 'no_weight_decay'):
+                to_skip = adapter.no_weight_decay()
+                to_skip = set([f'input_adapters.{task}.{name}' for name in to_skip])
+                no_wd_set = no_wd_set | to_skip
+
+        for task, adapter in self.output_adapters.items():
+            if hasattr(adapter, 'no_weight_decay'):
+                to_skip = adapter.no_weight_decay()
+                to_skip = set([f'output_adapters.{task}.{name}' for name in to_skip])
+                no_wd_set = no_wd_set | to_skip
+
+        return no_wd_set
+
+    def sample_alphas(self, B: int, n_tasks: int, alphas: float = 1.0, eps: float = 1e-5):
         """
-        x: (N, L, patch_size**2 *3)
-        imgs: (N, 3, H, W)
+        Sample alphas for Dirichlet sampling such that tasks are first uniformly chosen and then Dirichlet sampling
+        is performed over the chosen ones.
+        :param B: Batch size
+        :param n_tasks: Number of input tasks
+        :param alphas: Float or list to multiply task choices {0,1} by
+        :param eps: Small constant since Dirichlet alphas need to be positive
         """
-        p = stride
-        h = w = int(x.shape[1] ** .5)
-        assert h * w == x.shape[1]
+        valid_task_choices = torch.Tensor([list(i) for i in itertools.product([0, 1], repeat=n_tasks)][1:])
+        rand_per_sample_choice = torch.randint(0, len(valid_task_choices), (B,))
+        alphas_tensor = torch.index_select(valid_task_choices, 0, rand_per_sample_choice)
+        alphas_tensor = alphas_tensor * torch.tensor(alphas) + eps
+        return alphas_tensor
 
-        x = x.reshape(shape=(x.shape[0], h, w, p, p, 3))
-        x = torch.einsum('nhwpqc->nchpwq', x)
-        imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
-        return imgs
-
-    def patchify(self, imgs, stride=16):
+    def generate_random_masks(self,
+                              input_tokens: Dict[str, torch.Tensor],
+                              num_encoded_tokens: int,
+                              alphas: Union[float, List[float]] = 1.0,
+                              sample_tasks_uniformly: bool = False):
         """
-        imgs: (N, 3, H, W)
-        x: (N, L, patch_size**2 *3)
+        Sample a total of num_encoded_tokens from different tasks using Dirichlet sampling.
+        :param input_tokens: Dictionary of tensors to sample num_encoded_tokens from
+        :param num_encoded_tokens: Number of tokens to select
+        :param alphas: Dirichlet distribution parameter alpha. Lower alpha = harder,
+            less uniform sampling. Can be float or list of floats.
+        :param sample_tasks_uniformly: Set to True to first sample 1-n_tasks uniformly at random
+            for each sample in the batch. Dirichlet sampling is then done over selected subsets.
         """
-        p = stride
-        assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
+        B = list(input_tokens.values())[0].shape[0]
+        device = list(input_tokens.values())[0].device
 
-        h = w = imgs.shape[2] // p
-        x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))
-        x = torch.einsum('nchpwq->nhwpqc', x)
-        x = x.reshape(shape=(imgs.shape[0], h * w, p ** 2 * 3))
-        return x
-
-    def forward_encoder(self, x, mask):
-        N = x.size(0)
-        # embed patches
-        x = self.patch_embed(x)
-
-        # secondary mask
-        L = mask.size(1)
-        vis_cnt = L - len(mask[0].nonzero())
-        vis_final_cnt = int(vis_cnt * (1. - self.vis_mask_ratio))  # final visible
-        noise = torch.rand(N, L, device=x.device)
-        mask_noise = mask.float() + noise
-        ids_shuffle = torch.argsort(mask_noise, dim=1)
-        ids_restore = torch.argsort(ids_shuffle, dim=1)
-        new_mask = torch.ones([N, L], device=x.device)
-        new_mask[:, :vis_final_cnt] = 0
-        new_mask = torch.gather(new_mask, dim=1, index=ids_restore).to(torch.bool)
-
-        # and amplify mask (N, L) and new_mask (N, L), new_mask has more 1 (mask)
-        M = int(L ** 0.5)
-        scale = self.embed_h // M
-        mask = mask.reshape(N, M, M)
-        mask = mask.repeat_interleave(scale, 1).repeat_interleave(scale, 2).unsqueeze(1).contiguous()
-        new_mask = new_mask.reshape(N, M, M)
-        new_mask = new_mask.repeat_interleave(scale, 1).repeat_interleave(scale, 2).unsqueeze(1).contiguous()
-
-        # add vis_mask_token
-        if hasattr(self, 'vis_mask_token'):
-            token_mask = (~mask).int() - (~new_mask).int()
-            vis_mask_token = self.vis_mask_token.expand(N, self.patch_embed.num_patches, -1)
-            vis_mask_token = vis_mask_token.reshape(N, self.embed_h, self.embed_w, self.embed_dims[0]).permute(0, 3, 1,
-                                                                                                               2)  # N C H W
-            vis_mask_token = vis_mask_token * token_mask
+        alphas = [alphas] * len(input_tokens) if isinstance(alphas, float) else alphas
+        if sample_tasks_uniformly:
+            alphas = self.sample_alphas(B, len(input_tokens), alphas=alphas)
+            task_sampling_dist = Dirichlet(alphas).sample().to(device)
         else:
-            vis_mask_token = 0
+            task_sampling_dist = Dirichlet(torch.Tensor(alphas)).sample((B,)).to(device)
 
-        # prepare variables
-        K = self.kernel_stride
-        H, W = self.embed_h, self.embed_w
-        self.kernel = self.kernel.to(x.device)
+        samples_per_task = (task_sampling_dist * num_encoded_tokens).round().long()
 
-        # x to image shape (N, L, D) -> (N, C, H//2, W//2)
-        x = x.reshape(N, self.embed_h, self.embed_w, self.embed_dims[0]).permute(0, 3, 1, 2)  # N C H W
-        x = x * (~new_mask) + vis_mask_token
-        x = rearrange(x, 'b c (h p1) (w p2) -> (b h w) c p1 p2', p1=K * 2, p2=K * 2)
-        x = F.conv2d(x, self.kernel, dilation=K, groups=self.embed_dims[0])
-        x = rearrange(x, '(b h w) c p1 p2 -> b c (h p1) (w p2)', h=H // (K * 2), w=W // (K * 2))
+        task_masks = []
+        num_tokens_per_task = [task_tokens.shape[1] for task_tokens in input_tokens.values()]
+        for i, num_tokens in enumerate(num_tokens_per_task):
+            # Use noise to shuffle arange
+            noise = torch.rand(B, num_tokens, device=device)  # noise in [0, 1]
+            ids_arange_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+            mask = torch.arange(num_tokens, device=device).unsqueeze(0).expand(B, -1)
+            mask = torch.gather(mask, dim=1, index=ids_arange_shuffle)
+            # 0 is keep (unmasked), 1 is remove (masked)
+            mask = torch.where(mask < samples_per_task[:, i].unsqueeze(1), 0, 1)
+            task_masks.append(mask)
 
-        # pos_embed to image shape (N, L, D) -> (N, C, H//2, W//2)
-        ipe = self.pos_embed.expand(N, -1, -1)
-        ipe = ipe.reshape(N, self.embed_h, self.embed_w, self.embed_dims[0]).permute(0, 3, 1, 2)
-        ipe = ipe * (~mask)  # attention mask here
-        ipe = rearrange(ipe, 'b c (h p1) (w p2) -> (b h w) c p1 p2', p1=K * 2, p2=K * 2)
-        ipe = F.conv2d(ipe, self.kernel, dilation=K, groups=self.embed_dims[0])
-        ipe = rearrange(ipe, '(b h w) c p1 p2 -> b c (h p1) (w p2)', h=H // (K * 2), w=W // (K * 2))
+        mask_all = torch.cat(task_masks, dim=1)
+        ids_shuffle = torch.argsort(mask_all + torch.rand_like(mask_all.float()), dim=1)
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+        ids_keep = ids_shuffle[:, :num_encoded_tokens]
 
-        # add position embedding
-        x = x + ipe
+        # Update binary mask to adjust for task rounding
+        mask_all = torch.ones_like(mask_all)
+        mask_all[:, :num_encoded_tokens] = 0
+        # Unshuffle to get the binary mask
+        mask_all = torch.gather(mask_all, dim=1, index=ids_restore)
+        # Split to get task masks
+        task_masks = torch.split(mask_all, num_tokens_per_task, dim=1)
+        # Convert to dict
+        task_masks = {domain: mask for domain, mask in zip(input_tokens.keys(), task_masks)}
 
-        _, _, H, W = x.size()
-        # reverse x to (N, L, C)
-        x = x.permute(0, 2, 3, 1).reshape(N, -1, self.embed_dims[0])
+        return task_masks, ids_keep, ids_restore
 
-        # apply Transformer blocks
-        for blk in self.blocks:
-            x, (H, W) = blk(x, H, W)
-        x = self.norm(x)
-
-        return x
-
-    def forward_decoder(self, x, mask):
-        # embed tokens
-        x = self.decoder_embed(x)
-        x_vis = x
-        N, L, nD = x_vis.shape
-        M = int(L ** 0.5)
-        x_vis = self.decoder_expand(x_vis.permute(0, 2, 1).reshape(-1, nD, M, M)).flatten(2)
-        x_vis = x_vis.permute(0, 2, 1)
-        _, _, D = x_vis.shape
-
-        # append mask tokens to sequence
-        expand_pos_embed = self.decoder_pos_embed.expand(N, -1, -1)
-        pos_vis = expand_pos_embed[~mask].reshape(N, -1, D)
-        pos_mask = expand_pos_embed[mask].reshape(N, -1, D)
-
-        x = torch.cat([x_vis + pos_vis, self.mask_token + pos_mask], dim=1)
-
-        # apply Transformer blocks
-        for blk in self.decoder_blocks:
-            x = blk(x)
-        x = self.decoder_norm(x)
-
-        # predictor projection
-        x = self.decoder_pred(x)
-
-        return x, pos_mask.shape[1]
-
-    def forward_loss(self, imgs, pred, mask):
+    @staticmethod
+    def make_mask(N_H, N_W, xy_idxs, full_tasks=[], indicate_visible=True, flatten=True, device='cuda'):
         """
-        imgs: [N, 3, H, W]
-        pred: [N, mask, p*p*3]
-        mask: [N, L], 0 is keep, 1 is remove,
+        Creates masks for each task, given lists of un-masked x,y coordinates.
         """
-        target = self.patchify(imgs, self.stride)
-        N, _, D = target.shape
-        target = target[mask].reshape(N, -1, D)
-        if self.norm_pix_loss:
-            mean = target.mean(dim=-1, keepdim=True)
-            var = target.var(dim=-1, keepdim=True)
-            target = (target - mean) / (var + 1.e-6) ** .5  # (N, L, p*p*3)
+        xy_idxs = {
+            k: torch.LongTensor(v)
+            for k, v in xy_idxs.items()
+        }
 
-        loss = (pred - target) ** 2
-        loss = loss.mean()
-        return loss
+        task_masks = {
+            k: torch.ones(N_H, N_W).to(device)
+            for k in xy_idxs.keys()
+        }
 
-    def forward(self, imgs, mask):
-        latent = self.forward_encoder(imgs, mask)  # returned mask may change
-        pred, mask_num = self.forward_decoder(latent, mask)  # [N, L, p*p*3]
-        loss = self.forward_loss(imgs, pred[:, -mask_num:], mask)
-        return loss, pred, mask
+        for k in xy_idxs.keys():
+            if len(xy_idxs[k]) > 0:
+                task_masks[k][xy_idxs[k][:, 1], xy_idxs[k][:, 0]] = 0
+
+        for task in full_tasks:
+            task_masks[task][:] = 0
+
+        if not indicate_visible:
+            task_masks = {k: 1 - v for k, v in task_masks.items()}
+
+        if flatten:
+            task_masks = {k: v.flatten().unsqueeze(0) for k, v in task_masks.items()}
+
+        return task_masks
+
+    def generate_input_info(self, input_task_tokens, image_size):
+        input_info = OrderedDict()
+        i = 0
+        input_info['tasks'] = {}
+        for domain, tensor in input_task_tokens.items():
+            num_tokens = tensor.shape[1]
+            d = {
+                'num_tokens': num_tokens,
+                'has_2d_posemb': True,  # TODO: Modify when adding non-2D tasks
+                'start_idx': i,
+                'end_idx': i + num_tokens,
+            }
+            i += num_tokens
+            input_info['tasks'][domain] = d
+
+        input_info['image_size'] = image_size
+        input_info['num_task_tokens'] = i
+        input_info['num_global_tokens'] = self.num_global_tokens
+
+        return input_info
+
+    def forward(self,
+                x: Union[Dict[str, torch.Tensor], torch.Tensor],
+                mask_inputs: bool = True,
+                task_masks: Dict[str, torch.Tensor] = None,
+                num_encoded_tokens: int = 128,
+                alphas: Union[float, List[float]] = 1.0,
+                sample_tasks_uniformly: bool = False,
+                fp32_output_adapters: List[str] = []):
+        """
+        Forward pass through input adapters, transformer encoder and output adapters.
+        If specified, will randomly drop input tokens.
+        :param x: Input tensor or dictionary of tensors
+        :param mask_inputs: Set to True to enable random masking of input patches
+        :param task_masks: Optional dictionary of task->mask pairs.
+        :param num_encoded_tokens: Number of tokens to randomly select for encoder.
+            Only used if mask_inputs is True.
+        :param alphas: Dirichlet distribution parameter alpha for task sampling.
+            Higher alpha = harder, less uniform sampling. Can be float or list of floats.
+        :param sample_tasks_uniformly: Set to True if tasks should be uniformly presampled,
+            before Dirichlet sampling decides share of masked tokens between them.
+        :param fp32_output_adapters: List of task identifiers to force output adapters to
+            run with mixed precision turned off for stability reasons.
+        """
+
+        ## Processing input modalities
+        # If input x is a Tensor, assume it's RGB
+        x = {'rgb': x} if isinstance(x, torch.Tensor) else x
+
+        # Need image size for tokens->image reconstruction
+        # We assume that at least one of rgb or semseg is given as input before masking
+        if 'rgb' in x:
+            B, C, H, W = x['rgb'].shape
+        elif 'semseg' in x:
+            B, H, W = x['semseg'].shape
+            H *= self.input_adapters['semseg'].stride_level
+            W *= self.input_adapters['semseg'].stride_level
+        else:
+            B, C, H, W = list(x.values())[0].shape  # TODO: Deal with case where not all have same shape
+
+        # Encode selected inputs to tokens
+        input_task_tokens = {
+            domain: self.input_adapters[domain](tensor)
+            for domain, tensor in x.items()
+            if domain in self.input_adapters
+        }
+
+        input_info = self.generate_input_info(input_task_tokens=input_task_tokens, image_size=(H, W))
+
+        # Select random subset of tokens from the chosen input tasks and concatenate them
+        if mask_inputs:
+            num_encoded_tokens = num_encoded_tokens if num_encoded_tokens is not None else self.num_encoded_tokens
+        else:
+            num_encoded_tokens = sum([tensor.shape[1] for tensor in input_task_tokens.values()])
+
+        ## Generating masks
+        if task_masks is None:
+            task_masks, ids_keep, ids_restore = self.generate_random_masks(
+                input_task_tokens,
+                num_encoded_tokens,
+                alphas=alphas,
+                sample_tasks_uniformly=sample_tasks_uniformly
+            )
+        else:
+            mask_all = torch.cat([task_masks[task] for task in input_task_tokens.keys()], dim=1)
+            ids_shuffle = torch.argsort(mask_all, dim=1)
+            ids_restore = torch.argsort(ids_shuffle, dim=1)
+            ids_keep = ids_shuffle[:, :(mask_all == 0).sum()]
+
+        input_tokens = torch.cat([task_tokens for task_tokens in input_task_tokens.values()], dim=1)
+
+        # Apply mask
+        input_tokens = torch.gather(input_tokens, dim=1,
+                                    index=ids_keep.unsqueeze(-1).repeat(1, 1, input_tokens.shape[2]))
+
+        # Add global tokens to input tokens
+        global_tokens = repeat(self.global_tokens, '() n d -> b n d', b=B)
+        input_tokens = torch.cat([input_tokens, global_tokens], dim=1)
+
+        ## Transformer forward pass
+        encoder_tokens = self.encoder(input_tokens)
+
+        ## Output decoders
+        if self.output_adapters is None:
+            return encoder_tokens, task_masks
+
+        # Decode tokens for each task using task-specific output adapters
+        preds = {
+            domain: self.output_adapters[domain](
+                encoder_tokens=encoder_tokens,
+                input_info=input_info,
+                ids_keep=ids_keep,
+                ids_restore=ids_restore,
+            )
+            for domain in self.output_adapters
+            if domain not in fp32_output_adapters
+        }
+        # Force running selected output adapters in fp32 mode
+        with torch.cuda.amp.autocast(enabled=False):
+            for domain in fp32_output_adapters:
+                if domain not in self.output_adapters:
+                    continue
+                preds[domain] = self.output_adapters[domain](
+                    encoder_tokens=encoder_tokens.float(),
+                    input_info=input_info,
+                    ids_keep=ids_keep,
+                    ids_restore=ids_restore,
+                )
+
+        return preds, task_masks
 
 
-def mae_pvt_small_512_dec512d2b(**kwargs):
-    model = MaskedAutoencoderPVT(
-        img_size=512, patch_size=4, in_chans=3, stride=16,
-        embed_dims=[64, 128, 320, 512], depths=[3, 4, 6, 3], num_heads=[1, 2, 5, 8],
-        mlp_ratios=[8, 8, 4, 4], sr_ratios=[4, 2, 1, 1],  # [8, 4, 2, 1] for finetune
-        decoder_embed_dim=512, decoder_depth=2, decoder_num_heads=16,
-        decoder_mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+@register_model
+def pretrain_multimae_base(
+        input_adapters: Dict[str, nn.Module],
+        output_adapters: Optional[Dict[str, nn.Module]],
+        **kwargs):
+    model = MultiMAE(
+        input_adapters=input_adapters,
+        output_adapters=output_adapters,
+        dim_tokens=768,
+        depth=12,
+        num_heads=12,
+        mlp_ratio=4,
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs
+    )
     return model
 
 
-# set recommended archs
-mae_pvt_small_256 = mae_pvt_small_512_dec512d2b  # decoder: 512 dim, 2 blocks
+@register_model
+def pretrain_multimae_large(
+        input_adapters: Dict[str, nn.Module],
+        output_adapters: Optional[Dict[str, nn.Module]],
+        **kwargs):
+    model = MultiMAE(
+        input_adapters=input_adapters,
+        output_adapters=output_adapters,
+        dim_tokens=1024,
+        depth=24,
+        num_heads=16,
+        mlp_ratio=4,
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs
+    )
+    return model
+
+
+class MultiViT(MultiMAE):
+    """MultiViT: Multi-modal Vision Transformer
+    This is MultiMAE without masking and with a simplified / faster forward pass
+    :param input_adapters: Dictionary of task -> input adapters
+    :param output_adapters: Optional dictionary of task -> output adapters
+    :param num_global_tokens: Number of additional global tokens to add (like cls tokens), default is 1
+    :param dim_tokens: Dimension of encoder tokens
+    :param depth: Depth of encoder
+    :param num_heads: Number of attention heads
+    :param mlp_ratio: MLP hidden dim ratio
+    :param qkv_bias: Set to False to disable bias
+    :param drop_rate: Dropout after MLPs and Attention
+    :param attn_drop_rate: Attention matrix drop rate
+    :param drop_path_rate: DropPath drop rate
+    :param norm_layer: Type of normalization layer
+    """
+
+    def process_input(self, x):
+
+        # If input x is a Tensor, assume it's RGB
+        x = {'rgb': x} if isinstance(x, torch.Tensor) else x
+        # Need image size for tokens->image reconstruction
+        if 'rgb' in x:
+            B, _, H, W = x['rgb'].shape
+        elif 'semseg' in x:
+            B, H, W = x['semseg'].shape
+            H *= self.input_adapters['semseg'].stride_level
+            W *= self.input_adapters['semseg'].stride_level
+        else:
+            B, _, H, W = list(x.values())[0].shape  # TODO: Deal with case where not all have same shape
+
+        # Encode selected inputs to tokens
+        input_task_tokens = {
+            domain: self.input_adapters[domain](tensor)
+            for domain, tensor in x.items()
+            if domain in self.input_adapters
+        }
+
+        input_info = self.generate_input_info(input_task_tokens=input_task_tokens, image_size=(H, W))
+        input_tokens = torch.cat([task_tokens for task_tokens in input_task_tokens.values()], dim=1)
+
+        # Add global tokens to input tokens
+        global_tokens = repeat(self.global_tokens, '() n d -> b n d', b=B)
+        input_tokens = torch.cat([input_tokens, global_tokens], dim=1)
+
+        return input_tokens, input_info
+
+    def forward(self, x: Union[Dict[str, torch.Tensor], torch.Tensor], return_all_layers=False, **kwargs):
+        """
+        Forward pass through input adapters, transformer encoder and output adapters.
+        :param x: Input tensor or dictionary of tensors
+        :param return_all_layers: Set to True to return all transformer layers
+        """
+
+        input_tokens, input_info = self.process_input(x)
+
+        # Pass tokens through Transformer
+        if not return_all_layers:
+            encoder_tokens = self.encoder(input_tokens)
+        else:
+            # Optionally access every intermediate layer
+            encoder_tokens = []
+            tokens = input_tokens
+            for block in self.encoder:
+                tokens = block(tokens)
+                encoder_tokens.append(tokens)
+
+        if self.output_adapters is None:
+            return encoder_tokens
+
+        # Decode tokens for each task using task-specific output adapters
+        preds = {
+            domain: self.output_adapters[domain](
+                encoder_tokens=encoder_tokens,
+                input_info=input_info,
+            )
+            for domain in self.output_adapters
+        }
+
+        return preds
+
+
+@register_model
+def multivit_base(
+        input_adapters: Dict[str, nn.Module],
+        output_adapters: Optional[Dict[str, nn.Module]],
+        **kwargs):
+    model = MultiViT(
+        input_adapters=input_adapters,
+        output_adapters=output_adapters,
+        dim_tokens=768,
+        depth=12,
+        num_heads=12,
+        mlp_ratio=4,
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs
+    )
+    return model
+
+
+@register_model
+def multivit_large(
+        input_adapters: Dict[str, nn.Module],
+        output_adapters: Optional[Dict[str, nn.Module]],
+        **kwargs):
+    model = MultiViT(
+        input_adapters=input_adapters,
+        output_adapters=output_adapters,
+        dim_tokens=1024,
+        depth=24,
+        num_heads=16,
+        mlp_ratio=4,
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        **kwargs
+    )
+    return model
