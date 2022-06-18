@@ -1,8 +1,9 @@
 from . import mae
 from .unet import *
 from .mae import *
+from .refine import *
 from .maeutil import *
-import numpy as np
+import torchvision.transforms as T
 
 class SSCurveNet(nn.Module):
     def __init__(self, model=squeezenet1_1(pretrained=False), plane=64, fusion=SimpleFusion, final_relu=False,
@@ -41,87 +42,49 @@ class SSCurveNet(nn.Module):
             input_adapters=input_adapters,
             output_adapters=output_adapters,
         )
-        # self.mae = MAE(image_size=512,
-        #                image_channel=3,
-        #                patch_size=16,
-        #                enc_dim=512,
-        #                dec_dim=256,
-        #                encoder=dict(
-        #                    num_layers=12,
-        #                    norm=None,
-        #                    nhead=8,
-        #                    dim_feedforward=2048,
-        #                    dropout=0,
-        #                    activation='relu'
-        #                ),
-        #                decoder=dict(
-        #                    num_layers=12,
-        #                    norm=None,
-        #                    # layer_kwargs=dict(
-        #                    nhead=4,
-        #                    dim_feedforward=1024,
-        #                    dropout=0,
-        #                    activation='relu'
-        #                    # )
-        #                ),
-        #                mask_ratio=0.75)
+
+        self.refine = MPRNet()
 
     def fuse(self, feed, fore):
         return self.fusion(feed, fore)
 
-    def forward(self, inp, mas, foremas):  # two image for mixing
 
-        foreground = inp * mas
-        background = inp * foremas
+    def mae_forward(self, inp, mas, foremas):
+        transform = T.Resize(32)
+
+        mas_mae = transform(mas)
+        mas_mae = mas_mae.flatten(1).long()
+        foremas_mae = transform(foremas)
+        foremas_mae = foremas_mae.flatten(1).long()
 
         input_dict = {}
+        input_dict['rgb'] = inp
 
-        input_dict['rgb'] = inp[0].unsqueeze(0)
-
-        num_encoded_tokens = 98 # the number of visible tokens
-        alphas = 1.0 # Dirichlet concentration parameter
-
-        preds, masks = self.multimae.forward(
-            input_dict, 
-            mask_inputs=True, # True if forward pass should sample random masks
-            num_encoded_tokens=num_encoded_tokens,
-            alphas=alphas
-        )
-        print(masks['rgb'].shape)
         mask = {}
-        # mask['rgb'] = torch.rand(32, 32)
+        mask['rgb'] = mas_mae
 
-        # mask['rgb'] = np.array([
-        #     [0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1],
-        #     [0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1],
-        #     [0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
-        #     [1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1],
-        #     [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1],
-        #     [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1],
-        #     [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0],
-        #     [1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1],
-        #     [1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0],
-        #     [1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1],
-        #     [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0],
-        #     [1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0],
-        #     [1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1],
-        #     [1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1]
-        # ])
-        mask['rgb'] = torch.rand(32, 32).numpy()
-        print(mask['rgb'].shape)
-
-        task_masks = {k: torch.LongTensor(v).flatten()[None].cuda() for k, v in mask.items()}
-        print(task_masks['rgb'].shape)
-        preds, masks = self.multimae.forward(
+        foreground_mae, _ = self.multimae.forward(
             input_dict,
             mask_inputs=True,
-            task_masks=task_masks
+            task_masks=mask
         )
 
-        preds = {domain: pred.detach().cpu() for domain, pred in preds.items()}
-        masks = {domain: mask.detach().cpu() for domain, mask in masks.items()}
+        mask['rgb'] = foremas_mae
 
-        exit()
+        background_mae, _ = self.multimae.forward(
+            input_dict,
+            mask_inputs=True,
+            task_masks=mask
+        )
+        return foreground_mae['rgb'], background_mae['rgb']
+
+    def refine(self, res):
+        return self.refine(res)
+
+
+    def forward(self, inp, mas, foremas):  # two image for mixing
+
+        foreground_mae, background_mae = self.mae_forward(inp, mas, foremas)
 
         feed = torch.cat([foreground_mae, mas], dim=1).cuda()
         fore = torch.cat([background_mae, foremas], dim=1).cuda()
