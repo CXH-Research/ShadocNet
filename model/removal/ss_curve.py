@@ -75,28 +75,43 @@ class SSCurveNet(nn.Module):
         background = inp * foremas
 
         input_dict = {}
-        input_dict['rgb'] = inp
 
+        input_dict['rgb'] = inp[0].unsqueeze(0)
+
+        num_encoded_tokens = 98 # the number of visible tokens
+        alphas = 1.0 # Dirichlet concentration parameter
+
+        preds, masks = self.multimae.forward(
+            input_dict, 
+            mask_inputs=True, # True if forward pass should sample random masks
+            num_encoded_tokens=num_encoded_tokens,
+            alphas=alphas
+        )
+        print(masks['rgb'].shape)
         mask = {}
+        # mask['rgb'] = torch.rand(32, 32)
 
-        mask['rgb'] = np.array([
-            [0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1],
-            [0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1],
-            [0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
-            [1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1],
-            [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1],
-            [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1],
-            [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0],
-            [1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1],
-            [1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0],
-            [1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0],
-            [1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0],
-            [1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1],
-            [1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1]
-        ])
+        # mask['rgb'] = np.array([
+        #     [0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1],
+        #     [0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1],
+        #     [0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
+        #     [1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1],
+        #     [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1],
+        #     [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1],
+        #     [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0],
+        #     [1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1],
+        #     [1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0],
+        #     [1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1],
+        #     [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0],
+        #     [1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0],
+        #     [1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1],
+        #     [1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1]
+        # ])
+        mask['rgb'] = torch.rand(32, 32).numpy()
+        print(mask['rgb'].shape)
 
         task_masks = {k: torch.LongTensor(v).flatten()[None].cuda() for k, v in mask.items()}
+        print(task_masks['rgb'].shape)
         preds, masks = self.multimae.forward(
             input_dict,
             mask_inputs=True,

@@ -350,7 +350,6 @@ class MultiMAE(nn.Module):
         return preds, task_masks
 
 
-@register_model
 def pretrain_multimae_base(
         input_adapters: Dict[str, nn.Module],
         output_adapters: Optional[Dict[str, nn.Module]],
@@ -369,7 +368,6 @@ def pretrain_multimae_base(
     return model
 
 
-@register_model
 def pretrain_multimae_large(
         input_adapters: Dict[str, nn.Module],
         output_adapters: Optional[Dict[str, nn.Module]],
@@ -470,7 +468,6 @@ class MultiViT(MultiMAE):
         return preds
 
 
-@register_model
 def multivit_base(
         input_adapters: Dict[str, nn.Module],
         output_adapters: Optional[Dict[str, nn.Module]],
@@ -489,7 +486,6 @@ def multivit_base(
     return model
 
 
-@register_model
 def multivit_large(
         input_adapters: Dict[str, nn.Module],
         output_adapters: Optional[Dict[str, nn.Module]],
