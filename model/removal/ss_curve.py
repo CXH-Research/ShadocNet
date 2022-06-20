@@ -43,6 +43,10 @@ class SSCurveNet(nn.Module):
             output_adapters=output_adapters,
         )
 
+        CKPT_URL = 'https://github.com/EPFL-VILAB/MultiMAE/releases/download/pretrained-weights/multimae-b_98_rgb+-depth-semseg_1600e_multivit-afff3f8c.pth'
+        ckpt = torch.hub.load_state_dict_from_url(CKPT_URL, map_location='cpu')
+        self.multimae.load_state_dict(ckpt['model'], strict=False)
+
         self.refine = MPRNet()
 
     def fuse(self, feed, fore):
