@@ -92,7 +92,7 @@ class DataLoaderTrain(Dataset):
             tar_img = torch.rot90(tar_img.flip(2), dims=(1, 2))
             mask_img = torch.rot90(mask_img.flip(2), dims=(1, 2))
 
-        filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
+        filename = os.path.split(tar_path)[-1]
 
         return inp_img, tar_img, mask_img, filename
 
@@ -138,7 +138,7 @@ class DataLoaderVal(Dataset):
         mask_img = TF.to_tensor(mask_img)
         mask_img = TF.resize(mask_img, [self.ps, self.ps])
 
-        filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
+        filename = os.path.split(tar_path)[-1]
 
         return inp_img, tar_img, mask_img, filename
 
@@ -181,6 +181,6 @@ class DataLoaderTest(Dataset):
         mask_img = TF.to_tensor(mask_img)
         mask_img = TF.resize(mask_img, [self.ps, self.ps])
 
-        filename = os.path.splitext(os.path.split(tar_path)[-1])[0]
+        filename = os.path.split(tar_path)[-1]
 
         return inp_img, tar_img, mask_img, filename

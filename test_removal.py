@@ -23,12 +23,11 @@ args = parser.parse_args()
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
-model = SSCurveNet()
-utils.load_checkpoint(model, args.weights)
+remove = SSCurveNet()
+utils.load_checkpoint(remove, args.weights)
 print("===>Testing using weights: ", args.weights)
-model.cuda()
-model_restoration = nn.DataParallel(model)
-model_restoration.eval()
+remove.cuda()
+remove.eval()
 detect = DSDGenerator().cuda()
 detect.load_state_dict(torch.load('./pretrained_models/detect_best.pth')['state_dict'])
 detect.eval()
@@ -56,10 +55,7 @@ for dataset in datasets:
             filenames = data_test[3]
             foremas = 1 - mask
 
-            fore = torch.cat([input_, mask], dim=1).cuda()
-            feed = torch.cat([input_, foremas], dim=1).cuda()
+            restored = remove(input_, mask, foremas)
 
-            restored = model_restoration(feed, fore)[0] * mask + model_restoration(fore, feed)[0] * foremas
-
-            save_image(restored, os.path.join(result_dir, filenames[0] + '.png'))
+            save_image(restored, os.path.join(result_dir, filenames[0]))
 
