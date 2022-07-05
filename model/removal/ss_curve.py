@@ -39,7 +39,7 @@ class SSCurveNet(nn.Module):
             for domain, dinfo in domain_conf.items()
         }
 
-        self.multimae = pretrain_multimae_large(
+        self.multimae = pretrain_multimae_base(
             input_adapters=input_adapters,
             output_adapters=output_adapters,
         )
@@ -92,10 +92,12 @@ class SSCurveNet(nn.Module):
         foremas_mae = transform(foremas)
         foremas_mae = foremas_mae.flatten(1).long()
 
+        input_dict = {'rgb': inp}
+
         mask = {'rgb': mas_mae}
 
         foreground_mae = self.multimae.forward(
-            inp,
+            input_dict,
             task_masks=mask
         )
 

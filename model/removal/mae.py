@@ -259,9 +259,10 @@ class MultiMAE(nn.Module):
             run with mixed precision turned off for stability reasons.
         """
 
+        x = {'rgb': x} if isinstance(x, torch.Tensor) else x
         # Need image size for tokens->image reconstruction
         # We assume that at least one of rgb or semseg is given as input before masking
-        B, C, H, W = x.shape
+        B, C, H, W = x['rgb'].shape
 
         # Encode selected inputs to tokens
         input_task_tokens = {
