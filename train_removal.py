@@ -51,7 +51,6 @@ detect.load_state_dict(torch.load('./pretrained_models/detect_best.pth')['state_
 detect.eval()
 remove.to(device)
 
-
 new_lr = opt.OPTIM.LR_INITIAL
 
 params = list(remove.parameters())
@@ -65,9 +64,10 @@ scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_e
 scheduler.step()
 
 # Loss #
-criterion_rl1 = losses.l1_relative
+# criterion_rl1 = losses.l1_relative
 criterion_perc = losses.Perceptual()
-criterion_tv = losses.total_variation_loss
+# criterion_tv = losses.total_variation_loss
+criterion_l1_loss = losses.masked_l1_loss
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -107,12 +107,14 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
 
         out = remove(inp, mas, foremas)
 
-        loss_rl1_1 = criterion_rl1(out, tar, mas)
-        loss_rl1_2 = criterion_rl1(out, tar, foremas)
-        loss_tv = criterion_tv(out)
+        # loss_rl1_1 = criterion_rl1(out, tar, mas)
+        # loss_rl1_2 = criterion_rl1(out, tar, foremas)
+        # loss_tv = criterion_tv(out)
+        loss_rl1_1 = criterion_l1_loss(out, tar, mas)
+        loss_rl1_2 = criterion_l1_loss(out, tar, foremas)
         loss_perc = criterion_perc(out, tar)
 
-        loss = loss_rl1_1 + loss_rl1_2 + 0.02 * loss_tv + 0.04 * loss_perc
+        loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc  # + 0.02 * loss_tv
 
         loss.backward()
         optimizer.step()

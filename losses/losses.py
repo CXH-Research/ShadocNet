@@ -159,84 +159,39 @@ class ContrastLoss(torch.nn.Module):
         return loss
 
 
-def dice_loss(prediction, target):
-    """Calculating the dice loss
-    Args:
-        prediction = predicted image
-        target = Targeted image
-    Output:
-        dice_loss"""
-
-    smooth = 1.0
-
-    i_flat = prediction.view(-1)
-    t_flat = target.view(-1)
-
-    intersection = (i_flat * t_flat).sum()
-
-    return 1 - ((2. * intersection + smooth) / (i_flat.sum() + t_flat.sum() + smooth))
+def masked_mse_loss(preds, target, mask_valid=None):
+    if mask_valid is None:
+        mask_valid = torch.ones_like(preds).bool()
+    if preds.shape[1] != mask_valid.shape[1]:
+        mask_valid = mask_valid.repeat_interleave(preds.shape[1], 1)
+    element_wise_loss = (preds - target) ** 2
+    element_wise_loss[~mask_valid] = 0
+    return element_wise_loss.sum() / mask_valid.sum()
 
 
-class WeightedL1Loss(nn.Module):
-    def __init__(self, alpha=1.0):
-        """
-            Note that input is between 0.0 (negative) and 1.0 (positive)
-            If alpha == 0.0, the loss is equal to L1.
-            Larger alpha emphasize the importance of positive labels
-        """
-        super().__init__()
-        assert alpha >= 0
-        self.alpha = alpha
-
-    def forward(self, output, target):
-        # The masks are mostly negative, so put more weight on positive masks
-        loss = torch.abs(output - target) * (1.0 + self.alpha * target)
-        return loss.mean()
+def masked_l1_loss(preds, target, mask_valid=None):
+    if mask_valid is None:
+        mask_valid = torch.ones_like(preds).bool()
+    if preds.shape[1] != mask_valid.shape[1]:
+        mask_valid = mask_valid.repeat_interleave(preds.shape[1], 1)
+    element_wise_loss = abs(preds - target)
+    element_wise_loss[~mask_valid] = 0
+    return element_wise_loss.sum() / mask_valid.sum()
 
 
-class WeightedCrossEntropyLoss(nn.Module):
-    """
-        Losses used in DSDNet
-        Distraction-aware Shadow Detection (CVPR2019)
-        https://quanlzheng.github.io/projects/Distraction-aware-Shadow-Detection.html
-    """
+def masked_berhu_loss(preds, target, mask_valid=None):
+    if mask_valid is None:
+        mask_valid = torch.ones_like(preds).bool()
+    if preds.shape[1] != mask_valid.shape[1]:
+        mask_valid = mask_valid.repeat_interleave(preds.shape[1], 1)
 
-    def __init__(self):
-        super().__init__()
-        self.bc = nn.BCEWithLogitsLoss(reduction='none')
+    diff = preds - target
+    diff[~mask_valid] = 0
+    with torch.no_grad():
+        c = max(torch.abs(diff).max() * 0.2, 1e-5)
 
-    def forward(self, output, target):
-        # B, C, H, W = target.size()
-        # loss = self.bc(output, target)
-        # target = target.int()
+    l1_loss = torch.abs(diff)
+    l2_loss = (torch.square(diff) + c ** 2) / 2. / c
+    berhu_loss = l1_loss[torch.abs(diff) < c].sum() + l2_loss[torch.abs(diff) >= c].sum()
 
-        # sample-wise weight
-        # pos_w = (target == 0).sum(dim=[1, 2, 3]).float() / (C * H * W)
-        # pos_w = pos_w.view(B, 1, 1, 1).repeat(1, C, H, W)
-        # neg_w = (target == 1).sum(dim=[1, 2, 3]).float() / (C * H * W)
-        # neg_w = neg_w.view(B, 1, 1, 1).repeat(1, C, H, W)
-        # w = torch.zeros_like(output)
-        # w[target == 0] = neg_w[target == 0]
-        # w[target == 1] = pos_w[target == 1]
-        # loss = (w * loss).mean()
-
-        # batch-wise weight
-        # pos_w = (target == 0).sum().float() / target.numel()
-        # neg_w = (target == 1).sum().float() / target.numel()
-        # w = torch.zeros_like(output)
-        # w[target == 0] = neg_w
-        # w[target == 1] = pos_w
-        # loss = (w * loss).mean()
-
-        # Following dsdnet
-        epsilon = 1e-10
-        # sigmoid_pred = torch.sigmoid(output)
-        count_pos = torch.sum(target) * 1.0 + epsilon
-        count_neg = torch.sum(1.0 - target) * 1.0
-        beta = count_neg / count_pos
-        beta_back = count_pos / (count_pos + count_neg)
-
-        bce1 = nn.BCEWithLogitsLoss(pos_weight=beta)
-        loss = beta_back * bce1(output, target)
-
-        return loss
+    return berhu_loss / mask_valid.sum()
