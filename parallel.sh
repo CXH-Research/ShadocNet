@@ -1,1 +1,0 @@
-parallel -j1 -N0 python train_removal.py ::: {1..1000}
