@@ -34,7 +34,7 @@ class MultiMAE(nn.Module):
     def __init__(self,
                  input_adapters: Dict[str, nn.Module],
                  output_adapters: Optional[Dict[str, nn.Module]],
-                 num_global_tokens: int = 1,
+                 num_global_tokens: int = 0,
                  dim_tokens: int = 768,
                  depth: int = 12,
                  num_heads: int = 12,
@@ -241,11 +241,7 @@ class MultiMAE(nn.Module):
 
     def forward(self,
                 x: Union[Dict[str, torch.Tensor], torch.Tensor],
-                mask_inputs: bool = True,
                 task_masks: Dict[str, torch.Tensor] = None,
-                num_encoded_tokens: int = 128,
-                alphas: Union[float, List[float]] = 1.0,
-                sample_tasks_uniformly: bool = False,
                 fp32_output_adapters: List[str] = []):
         """
         Forward pass through input adapters, transformer encoder and output adapters.
@@ -263,20 +259,9 @@ class MultiMAE(nn.Module):
             run with mixed precision turned off for stability reasons.
         """
 
-        # Processing input modalities
-        # If input x is a Tensor, assume it's RGB
-        x = {'rgb': x} if isinstance(x, torch.Tensor) else x
-
         # Need image size for tokens->image reconstruction
         # We assume that at least one of rgb or semseg is given as input before masking
-        if 'rgb' in x:
-            B, C, H, W = x['rgb'].shape
-        elif 'semseg' in x:
-            B, H, W = x['semseg'].shape
-            H *= self.input_adapters['semseg'].stride_level
-            W *= self.input_adapters['semseg'].stride_level
-        else:
-            B, C, H, W = list(x.values())[0].shape  # TODO: Deal with case where not all have same shape
+        B, C, H, W = x.shape
 
         # Encode selected inputs to tokens
         input_task_tokens = {
@@ -287,25 +272,13 @@ class MultiMAE(nn.Module):
 
         input_info = self.generate_input_info(input_task_tokens=input_task_tokens, image_size=(H, W))
 
-        # Select random subset of tokens from the chosen input tasks and concatenate them
-        if mask_inputs:
-            num_encoded_tokens = num_encoded_tokens if num_encoded_tokens is not None else self.num_encoded_tokens
-        else:
-            num_encoded_tokens = sum([tensor.shape[1] for tensor in input_task_tokens.values()])
-
         # Generating masks
-        if task_masks is None:
-            task_masks, ids_keep, ids_restore = self.generate_random_masks(
-                input_task_tokens,
-                num_encoded_tokens,
-                alphas=alphas,
-                sample_tasks_uniformly=sample_tasks_uniformly
-            )
-        else:
-            mask_all = torch.cat([task_masks[task] for task in input_task_tokens.keys()], dim=1)
-            ids_shuffle = torch.argsort(mask_all, dim=1)
-            ids_restore = torch.argsort(ids_shuffle, dim=1)
-            ids_keep = ids_shuffle[:, :(mask_all == 0).sum()]
+        mask_all = torch.cat([task_masks[task] for task in input_task_tokens.keys()], dim=1)
+        ids_shuffle = torch.argsort(mask_all, dim=1)
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+        ids_keep = ids_shuffle[:, :(mask_all == 0).sum()]
+
+        print(ids_keep)
 
         input_tokens = torch.cat([task_tokens for task_tokens in input_task_tokens.values()], dim=1)
 
@@ -319,6 +292,8 @@ class MultiMAE(nn.Module):
 
         # Transformer forward pass
         encoder_tokens = self.encoder(input_tokens)
+        print(encoder_tokens.shape)
+        exit()
 
         # Output decoders
         if self.output_adapters is None:
@@ -360,24 +335,6 @@ def pretrain_multimae_base(
         dim_tokens=768,
         depth=12,
         num_heads=12,
-        mlp_ratio=4,
-        qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
-        **kwargs
-    )
-    return model
-
-
-def pretrain_multimae_large(
-        input_adapters: Dict[str, nn.Module],
-        output_adapters: Optional[Dict[str, nn.Module]],
-        **kwargs):
-    model = MultiMAE(
-        input_adapters=input_adapters,
-        output_adapters=output_adapters,
-        dim_tokens=1024,
-        depth=24,
-        num_heads=16,
         mlp_ratio=4,
         qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6),

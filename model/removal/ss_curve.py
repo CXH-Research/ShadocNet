@@ -44,17 +44,47 @@ class SSCurveNet(nn.Module):
             output_adapters=output_adapters,
         )
 
-        ckpt_url = 'https://github.com/EPFL-VILAB/MultiMAE/releases/download/pretrained-weights/multimae-b_98_rgb' \
-                   '+-depth-semseg_1600e_multivit-afff3f8c.pth '
-        ckpt = torch.hub.load_state_dict_from_url(ckpt_url, map_location='cpu')
-        self.multimae.load_state_dict(ckpt['model'], strict=False)
+        # ckpt_url = 'https://github.com/EPFL-VILAB/MultiMAE/releases/download/pretrained-weights/multimae-b_98_rgb' \
+        #            '+-depth-semseg_1600e_multivit-afff3f8c.pth '
+        # ckpt = torch.hub.load_state_dict_from_url(ckpt_url, map_location='cpu')
+        # self.multimae.load_state_dict(ckpt['model'], strict=False)
 
         self.refine = MPRNet()
 
     def fuse(self, feed, fore):
         return self.fusion(feed, fore)
 
-    def mae_forward(self, inp, mas, foremas):
+    # def mae_forward(self, inp, mas, foremas):
+    #     transform = T.Resize(32)
+    #
+    #     mas_mae = transform(mas)
+    #     mas_mae = mas_mae.flatten(1).long()
+    #     foremas_mae = transform(foremas)
+    #     foremas_mae = foremas_mae.flatten(1).long()
+    #
+    #     input_dict = {'rgb': inp}
+    #
+    #     mask = {'rgb': mas_mae}
+    #
+    #     foreground_mae, _ = self.multimae.forward(
+    #         input_dict,
+    #         mask_inputs=True,
+    #         task_masks=mask
+    #     )
+    #
+    #     mask['rgb'] = foremas_mae
+    #
+    #     background_mae, _ = self.multimae.forward(
+    #         input_dict,
+    #         mask_inputs=True,
+    #         task_masks=mask
+    #     )
+    #     return foreground_mae['rgb'], background_mae['rgb']
+
+    def refine_forward(self, res):
+        return self.refine(res)
+
+    def encode_forward(self, inp, mas, foremas):
         transform = T.Resize(32)
 
         mas_mae = transform(mas)
@@ -62,31 +92,20 @@ class SSCurveNet(nn.Module):
         foremas_mae = transform(foremas)
         foremas_mae = foremas_mae.flatten(1).long()
 
-        input_dict = {'rgb': inp}
-
         mask = {'rgb': mas_mae}
 
-        foreground_mae, _ = self.multimae.forward(
-            input_dict,
-            mask_inputs=True,
+        foreground_mae = self.multimae.forward(
+            inp,
             task_masks=mask
         )
 
-        mask['rgb'] = foremas_mae
 
-        background_mae, _ = self.multimae.forward(
-            input_dict,
-            mask_inputs=True,
-            task_masks=mask
-        )
-        return foreground_mae['rgb'], background_mae['rgb']
-
-    def refine_forward(self, res):
-        return self.refine(res)
 
     def forward(self, inp, mas, foremas):  # two image for mixing
 
-        foreground_mae, background_mae = self.mae_forward(inp, mas, foremas)
+        self.encode_forward(inp, mas, foremas)
+        exit()
+        # foreground_mae, background_mae = self.mae_forward(inp, mas, foremas)
 
         feed = torch.cat([foreground_mae, mas], dim=1).cuda()
         fore = torch.cat([background_mae, foremas], dim=1).cuda()
