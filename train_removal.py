@@ -67,10 +67,9 @@ scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_e
 scheduler.step()
 
 # Loss #
-# criterion_rl1 = losses.l1_relative
+criterion_l1_loss = losses.l1_relative
 criterion_perc = losses.Perceptual()
 # criterion_tv = losses.total_variation_loss
-criterion_l1_loss = losses.masked_l1_loss
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
