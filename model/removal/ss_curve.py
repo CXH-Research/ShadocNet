@@ -1,3 +1,5 @@
+import torch
+
 from . import mae
 from .unet import *
 from .mae import *
@@ -85,28 +87,47 @@ class SSCurveNet(nn.Module):
         return self.refine(res)
 
     def encode_forward(self, inp, mas, foremas):
-        transform = T.Resize(32)
+        transform_1 = T.Resize(256)
+        transform_2 = T.Resize(128)
+        transform_3 = T.Resize(64)
+        transform_4 = T.Resize(32)
 
-        mas_mae = transform(mas)
-        mas_mae = mas_mae.flatten(1).long()
-        foremas_mae = transform(foremas)
-        foremas_mae = foremas_mae.flatten(1).long()
+        input_dict = {}
+        mask = {}
 
-        input_dict = {'rgb': inp}
+        for bs in range(inp.shape[0]):
+            inp_batch = inp[bs]
+            mas_batch = mas[bs]
+            foremas_batch = foremas[bs]
 
-        mask = {'rgb': mas_mae}
+            mas_mae = transform_4(transform_3(transform_2(transform_1(mas_batch))))
+            mas_mae = mas_mae.cpu().detach().numpy()
+            mas_mae = torch.LongTensor(mas_mae).flatten()[None].cuda()
 
-        foreground_mae = self.multimae.forward(
-            input_dict,
-            task_masks=mask
-        )
+            foremas_mae = transform_4(transform_3(transform_2(transform_1(foremas_batch))))
+            foremas_mae = foremas_mae.cpu().detach().numpy()
+            foremas_mae = torch.LongTensor(foremas_mae).flatten()[None].cuda()
 
+            input_dict['rgb'] = inp_batch
+            mask['rgb'] = mas_mae
+            fg_encode = self.multimae.forward(
+                input_dict,
+                task_masks=mask
+            )
 
+            mask['rgb'] = foremas_mae
+            bg_encode = self.multimae.forward(
+                input_dict,
+                task_masks=mask
+            )
+            print(fg_encode.shape, bg_encode.shape)
+            exit()
+        return encode
 
     def forward(self, inp, mas, foremas):  # two image for mixing
 
-        self.encode_forward(inp, mas, foremas)
-        exit()
+        encode = self.encode_forward(inp, mas, foremas)
+        print(encode.shape)
         # foreground_mae, background_mae = self.mae_forward(inp, mas, foremas)
 
         feed = torch.cat([foreground_mae, mas], dim=1).cuda()
