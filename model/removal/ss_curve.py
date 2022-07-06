@@ -53,35 +53,17 @@ class SSCurveNet(nn.Module):
 
         self.refine = MPRNet()
 
-    def fuse(self, feed, fore):
-        return self.fusion(feed, fore)
+    # def fuse_foward(self, inp, f_features, b_features):
+    #     for i in range(len(f_features)):
+    #         res = self.fusion(inp, f_features[i], b_features[i])
+    #         print(res.shape)
+    #         exit()
+    #     return self.fusion(feed, fore)
 
-    # def mae_forward(self, inp, mas, foremas):
-    #     transform = T.Resize(32)
-    #
-    #     mas_mae = transform(mas)
-    #     mas_mae = mas_mae.flatten(1).long()
-    #     foremas_mae = transform(foremas)
-    #     foremas_mae = foremas_mae.flatten(1).long()
-    #
-    #     input_dict = {'rgb': inp}
-    #
-    #     mask = {'rgb': mas_mae}
-    #
-    #     foreground_mae, _ = self.multimae.forward(
-    #         input_dict,
-    #         mask_inputs=True,
-    #         task_masks=mask
-    #     )
-    #
-    #     mask['rgb'] = foremas_mae
-    #
-    #     background_mae, _ = self.multimae.forward(
-    #         input_dict,
-    #         mask_inputs=True,
-    #         task_masks=mask
-    #     )
-    #     return foreground_mae['rgb'], background_mae['rgb']
+    def fuse_foward(self, feed, fore):
+        self.fusion(feed, fore)
+        exit()
+        return self.fusion(feed, fore)
 
     def refine_forward(self, res):
         return self.refine(res)
@@ -95,10 +77,12 @@ class SSCurveNet(nn.Module):
         input_dict = {}
         mask = {}
 
+        fg = []
+        bg = []
         for bs in range(inp.shape[0]):
-            inp_batch = inp[bs]
-            mas_batch = mas[bs]
-            foremas_batch = foremas[bs]
+            inp_batch = inp[bs].unsqueeze(0)
+            mas_batch = mas[bs].unsqueeze(0)
+            foremas_batch = foremas[bs].unsqueeze(0)
 
             mas_mae = transform_4(transform_3(transform_2(transform_1(mas_batch))))
             mas_mae = mas_mae.cpu().detach().numpy()
@@ -120,24 +104,23 @@ class SSCurveNet(nn.Module):
                 input_dict,
                 task_masks=mask
             )
-            print(fg_encode.shape, bg_encode.shape)
-            exit()
-        return encode
+
+            fg.append(fg_encode)
+            bg.append(bg_encode)
+
+        return fg, bg
 
     def forward(self, inp, mas, foremas):  # two image for mixing
 
-        encode = self.encode_forward(inp, mas, foremas)
-        print(encode.shape)
-        # foreground_mae, background_mae = self.mae_forward(inp, mas, foremas)
+        f_features, b_features = self.encode_forward(inp, mas, foremas)
 
-        feed = torch.cat([foreground_mae, mas], dim=1).cuda()
-        fore = torch.cat([background_mae, foremas], dim=1).cuda()
+        feed = torch.cat([inp, mas], dim=1).cuda()
+        fore = torch.cat([inp, foremas], dim=1).cuda()
 
-        mas_part = self.fuse(feed, fore) * mas
+        res = self.fuse_foward(feed, fore)
 
-        foremas_part = self.fuse(feed, fore) * foremas
 
-        res = mas_part + foremas_part
+        # res = self.fuse_foward(inp, f_features, b_features)
 
         res = self.refine_forward(res)
 

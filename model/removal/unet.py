@@ -1021,7 +1021,7 @@ class CreateNetNeuralPointRender(nn.Module):
             # import pdb; pdb.set_trace()
             self.feature_dim = 1280
         else:
-            raise ('error')
+            raise 'error'
 
         self.plane = plane
         # 512 -> 192
@@ -1045,11 +1045,46 @@ class CreateNetNeuralPointRender(nn.Module):
         # mlp mapping
         self.mlp = ResMLP(plane + ic, ic, [plane] * stage, act) if resmlp else MLP(plane + ic, ic, [plane] * stage, act)
 
+    def temp_forward(self, x, f_feature, b_feature):
+        # x, m = x[:, 0:3], x[:, 3:]
+        # fx, fm = fore[:, 0:3], fore[:, 3:]
+        bs, c, h, w = x.size()
+        #
+        # if self.use_norm:
+        #     x = self.norm(x)
+        #     fx = self.norm(fx)
+        #
+        # f = torch.cat([fx * fm, x * (1 - m)], dim=0)
+        # feature = self.backbone(f)
+        # f_feature, b_feature = torch.split(feature, feature.size(0) // 2, dim=0)
+        #
+        # self.f_feature = F.adaptive_avg_pool2d(f_feature, 1).view(x.size(0), -1)
+        # self.b_feature = F.adaptive_avg_pool2d(b_feature, 1).view(x.size(0), -1)
+
+        self.param_f = self.fc_f(self.f_feature)
+
+        if self.use_fcb:
+            self.param_b = self.fc_b(self.b_feature)
+        else:
+            self.param_b = self.fc_f(self.b_feature)
+
+        param = self.param_f + self.param_b
+
+        xp = x.permute(0, 2, 3, 1).reshape(bs, -1, c)
+        param = param.view(bs, 1, -1).expand(-1, h * w, -1)
+
+        if self.res:
+            xx = self.mlp(xp, param) + xp
+        else:
+            xx = self.mlp(xp, param)
+
+        return xx.view(bs, h, w, c).permute(0, 3, 1, 2).contiguous()  # bsx64
+
     def forward(self, x, fore):
         x, m = x[:, 0:3], x[:, 3:]
         fx, fm = fore[:, 0:3], fore[:, 3:]
         bs, c, h, w = x.size()
-
+        #
         if self.use_norm:
             x = self.norm(x)
             fx = self.norm(fx)
@@ -1058,8 +1093,13 @@ class CreateNetNeuralPointRender(nn.Module):
         feature = self.backbone(f)
         f_feature, b_feature = torch.split(feature, feature.size(0) // 2, dim=0)
 
+        print(f_feature)
+        print(b_feature)
         self.f_feature = F.adaptive_avg_pool2d(f_feature, 1).view(x.size(0), -1)
         self.b_feature = F.adaptive_avg_pool2d(b_feature, 1).view(x.size(0), -1)
+
+        print(f_feature)
+        print(b_feature)
 
         self.param_f = self.fc_f(self.f_feature)
 
@@ -1067,6 +1107,9 @@ class CreateNetNeuralPointRender(nn.Module):
             self.param_b = self.fc_b(self.b_feature)
         else:
             self.param_b = self.fc_f(self.b_feature)
+
+        print(f_feature)
+        print(b_feature)
 
         param = self.param_f + self.param_b
 
