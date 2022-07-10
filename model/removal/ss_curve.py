@@ -53,13 +53,6 @@ class SSCurveNet(nn.Module):
 
         self.refine = MPRNet()
 
-    # def fuse_foward(self, inp, f_features, b_features):
-    #     for i in range(len(f_features)):
-    #         res = self.fusion(inp, f_features[i], b_features[i])
-    #         print(res.shape)
-    #         exit()
-    #     return self.fusion(feed, fore)
-
     def fuse_foward(self, inp, f_feature, b_feature):
         return self.fusion(inp, f_feature, b_feature)
 
@@ -127,6 +120,6 @@ class SSCurveNet(nn.Module):
 
         res = self.fuse_foward(inp, f_f, b_f)
 
-        # res = self.refine_forward(res)
+        res = self.refine_forward(res)
 
         return res
