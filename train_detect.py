@@ -14,7 +14,7 @@ import utils
 from config import Config
 from data import get_training_data, get_validation_data
 from torchvision.utils import save_image
-from model import *
+from model import DSDGenerator
 from evaluation.ber import BER
 
 opt = Config('detect.yml')
