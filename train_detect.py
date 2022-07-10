@@ -13,7 +13,6 @@ from warmup_scheduler import GradualWarmupScheduler
 import utils
 from config import Config
 from data import get_training_data, get_validation_data
-from losses import dice_loss
 from torchvision.utils import save_image
 from model import *
 from evaluation.ber import BER
@@ -88,7 +87,6 @@ scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_e
 scheduler.step()
 
 # Loss #
-criterion_dice = dice_loss
 criterion_bce = torch.nn.BCEWithLogitsLoss()
 criterion_l1 = torch.nn.L1Loss()
 
