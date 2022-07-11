@@ -21,6 +21,6 @@ TRAINING:
   RESUME: False
   TRAIN_PS: 512
   VAL_PS: 512
-  TRAIN_DIR: './dataset/RGB/train'       # path to training data
-  VAL_DIR: './dataset/RGB/test' # path to validation data
+  TRAIN_DIR: '../RGB/train'       # path to training data
+  VAL_DIR: '../RGB/test' # path to validation data
 #  SAVE_DIR: './checkpoints'           # path to save models and images
