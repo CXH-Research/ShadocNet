@@ -137,7 +137,7 @@ def measure_all(detect, remove, data_loader):
         mas = detect(inp)['attn']
         foremas = 1 - mas
         with torch.no_grad():
-            res = remove(inp, mas, foremas)
+            res, _ = remove(inp, mas, foremas, tar)
             running_ssim += calc_ssim(res, tar)
             running_psnr += calc_psnr(res, tar)
 

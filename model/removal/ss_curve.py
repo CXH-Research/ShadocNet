@@ -1,17 +1,19 @@
 import torch
 
-from . import mae
-from .unet import *
 from .mae import *
-from .refine import *
 from .maeutil import *
-import torchvision.transforms as T
+from .refine import *
+from .unet import *
+import losses
 
 
 class SSCurveNet(nn.Module):
     def __init__(self, model=squeezenet1_1(pretrained=False), plane=64, fusion=SimpleFusion, final_relu=False,
                  stack=False, cr1=ColorCurveRender,
                  cr2=ColorCurveRender):
+
+        self.criterion_l1_loss = losses.l1_relative
+        self.criterion_perc = losses.Perceptual()
         super(SSCurveNet, self).__init__()
         # self.squeezenet1_1 = nn.Sequential(*list(model.children())[0][:12])
         self.fusion = CreateNetNeuralPointRender()
@@ -97,7 +99,7 @@ class SSCurveNet(nn.Module):
 
         return fg, bg
 
-    def forward(self, inp, mas, foremas):  # two image for mixing
+    def forward(self, inp, mas, foremas, tar):  # two image for mixing
 
         f_features, b_features = self.encode_forward(inp, mas, foremas)
 
@@ -121,6 +123,18 @@ class SSCurveNet(nn.Module):
 
         res = self.fuse_foward(inp, f_f, b_f)
 
+        loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
+        loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
+        loss_perc = self.criterion_perc(res, tar)
+
+        loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
+
         res = self.refine_forward(res)
 
-        return res
+        loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
+        loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
+        loss_perc = self.criterion_perc(res, tar)
+
+        loss += loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
+
+        return res, loss

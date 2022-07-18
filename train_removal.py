@@ -107,16 +107,9 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # fore = torch.cat([inp, mas], dim=1).to(device)
         # feed = torch.cat([inp, foremas], dim=1).to(device)
 
-        out = remove(inp, mas, foremas)
+        out, loss = remove(inp, mas, foremas, tar)
 
-        # loss_rl1_1 = criterion_rl1(out, tar, mas)
-        # loss_rl1_2 = criterion_rl1(out, tar, foremas)
-        # loss_tv = criterion_tv(out)
-        loss_rl1_1 = criterion_l1_loss(out, tar, mas)
-        loss_rl1_2 = criterion_l1_loss(out, tar, foremas)
-        loss_perc = criterion_perc(out, tar)
-
-        loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc  # + 0.02 * loss_tv
+        # loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc  # + 0.02 * loss_tv
 
         loss.backward()
         optimizer.step()
