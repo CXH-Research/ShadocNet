@@ -993,7 +993,7 @@ class ResMLP(nn.Module):
 
 
 class CreateNetNeuralPointRender(nn.Module):
-    def __init__(self, backbone='squeezenet', plane=64, ic=3, stage=2, resmlp=True, act=nn.ReLU, res=False,
+    def __init__(self, backbone='squeezenet', plane=64, ic=3, stage=2, resmlp=False, act=nn.ReLU, res=False,
                  use_fcb=True, use_norm=False):
         super(CreateNetNeuralPointRender, self).__init__()
 
@@ -1077,9 +1077,9 @@ class CreateNetNeuralPointRender(nn.Module):
         param = param.view(bs, 1, -1).expand(-1, h * w, -1)
 
         if self.res:
-            xx = self.mlp(xp) + xp
+            xx = self.mlp(xp, param) + xp
         else:
-            xx = self.mlp(xp)
+            xx = self.mlp(xp, param)
 
         return xx.view(bs, h, w, c).permute(0, 3, 1, 2).contiguous()  # bsx64
 
