@@ -993,35 +993,35 @@ class ResMLP(nn.Module):
 
 
 class CreateNetNeuralPointRender(nn.Module):
-    def __init__(self, backbone='squeezenet', plane=64, ic=3, stage=2, resmlp=False, act=nn.ReLU, res=False,
+    def __init__(self, backbone='squeezenet', plane=64, ic=3, stage=2, resmlp=True, act=nn.ReLU, res=False,
                  use_fcb=True, use_norm=False):
         super(CreateNetNeuralPointRender, self).__init__()
 
         self.backbone = backbone
 
-        if self.backbone == 'squeezenet':
-            model = squeezenet1_1(pretrained=False)
-            # model.load_state_dict(
-            #     torch.load('./pretrained_models/squeezenet1_1-b8a52dc0.pth'))
-            self.backbone = nn.Sequential(*list(model.children())[0][:12])
-            self.feature_dim = 512
-
-        elif self.backbone == 'mobilenet':
-            model = models.mobilenet_v3_small(pretrained=False)
-            model.load_state_dict(
-                torch.load('/apdcephfs/share_1290939/shadowcun/pretrained/mobilenet_v3_small-047dcff4.pth'))
-            self.backbone = nn.Sequential(*list(model.features))
-            # import pdb; pdb.set_trace()
-            self.feature_dim = 576
-        elif self.backbone == 'eb0':
-            model = models.efficientnet_b0(pretrained=False)
-            model.load_state_dict(
-                torch.load('/apdcephfs/share_1290939/shadowcun/pretrained/efficientnet_b0_rwightman-3dd342df.pth'))
-            self.backbone = nn.Sequential(*list(model.features))
-            # import pdb; pdb.set_trace()
-            self.feature_dim = 1280
-        else:
-            raise 'error'
+        # if self.backbone == 'squeezenet':
+        #     model = squeezenet1_1(pretrained=False)
+        #     # model.load_state_dict(
+        #     #     torch.load('./pretrained_models/squeezenet1_1-b8a52dc0.pth'))
+        #     self.backbone = nn.Sequential(*list(model.children())[0][:12])
+        #     self.feature_dim = 512
+        #
+        # elif self.backbone == 'mobilenet':
+        #     model = models.mobilenet_v3_small(pretrained=False)
+        #     model.load_state_dict(
+        #         torch.load('/apdcephfs/share_1290939/shadowcun/pretrained/mobilenet_v3_small-047dcff4.pth'))
+        #     self.backbone = nn.Sequential(*list(model.features))
+        #     # import pdb; pdb.set_trace()
+        #     self.feature_dim = 576
+        # elif self.backbone == 'eb0':
+        #     model = models.efficientnet_b0(pretrained=False)
+        #     model.load_state_dict(
+        #         torch.load('/apdcephfs/share_1290939/shadowcun/pretrained/efficientnet_b0_rwightman-3dd342df.pth'))
+        #     self.backbone = nn.Sequential(*list(model.features))
+        #     # import pdb; pdb.set_trace()
+        #     self.feature_dim = 1280
+        # else:
+        #     raise 'error'
 
         self.plane = plane
         # 512 -> 192
