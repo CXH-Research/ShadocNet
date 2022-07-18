@@ -1022,7 +1022,7 @@ class CreateNetNeuralPointRender(nn.Module):
         #     self.feature_dim = 1280
         # else:
         #     raise 'error'
-
+        self.feature_dim = 512
         self.plane = plane
         # 512 -> 192
         self.fc_f = nn.Linear(self.feature_dim, plane)  # bs x 3 x 64 #
