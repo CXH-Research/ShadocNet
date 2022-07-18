@@ -11,10 +11,9 @@ class SSCurveNet(nn.Module):
     def __init__(self, model=squeezenet1_1(pretrained=False), plane=64, fusion=SimpleFusion, final_relu=False,
                  stack=False, cr1=ColorCurveRender,
                  cr2=ColorCurveRender):
-
+        super(SSCurveNet, self).__init__()
         self.criterion_l1_loss = losses.l1_relative
         self.criterion_perc = losses.Perceptual()
-        super(SSCurveNet, self).__init__()
         # self.squeezenet1_1 = nn.Sequential(*list(model.children())[0][:12])
         self.fusion = CreateNetNeuralPointRender()
         domain_conf = {
