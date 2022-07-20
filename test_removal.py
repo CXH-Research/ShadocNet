@@ -13,7 +13,7 @@ from model import *
 
 parser = argparse.ArgumentParser(description='Shadow Removal')
 
-parser.add_argument('--input_dir', default='./dataset/', type=str, help='Directory of validation images')
+parser.add_argument('--input_dir', default='../', type=str, help='Directory of validation images')
 parser.add_argument('--result_dir', default='./results/', type=str, help='Directory for results')
 parser.add_argument('--weights', default='./pretrained_models/model_best.pth', type=str, help='Path to weights')
 parser.add_argument('--gpus', default='0', type=str, help='CUDA_VISIBLE_DEVICES')
