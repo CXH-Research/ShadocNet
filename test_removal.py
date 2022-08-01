@@ -55,7 +55,7 @@ for dataset in datasets:
             filenames = data_test[3]
             foremas = 1 - mask
 
-            restored = remove(input_, mask, foremas)
+            restored = remove(input_, mask, foremas, target)
 
             save_image(restored, os.path.join(result_dir, filenames[0]))
 
