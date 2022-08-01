@@ -114,7 +114,10 @@ class SSCurveNet(nn.Module):
         f_f, b_f = [], []
         for x, y in zip(f_features, b_features):
             temp_x = F.adaptive_avg_pool2d(x, (1, 512))
-            temp_y = F.adaptive_avg_pool2d(y, (1, 512))
+            try:
+                temp_y = F.adaptive_avg_pool2d(y, (1, 512))
+            except RuntimeError:
+                print(y.shape)
             f_f.append(temp_x.squeeze(0))
             b_f.append(temp_y.squeeze(0))
         f_f = torch.cat(f_f, 0)
