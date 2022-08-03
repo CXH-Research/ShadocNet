@@ -1,21 +1,16 @@
 import os
-from config import Config
+import random
 
-import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-
-import random
-import time
-import numpy as np
+from tqdm import tqdm
+from warmup_scheduler import GradualWarmupScheduler
 
 import utils
+from config import Config
 from data import get_training_data, get_validation_data
 from evaluation.removal import measure_all
 from model import *
-from tqdm import tqdm
-import losses
-from warmup_scheduler import GradualWarmupScheduler
 
 opt = Config('remove.yml')
 

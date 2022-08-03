@@ -999,30 +999,29 @@ class CreateNetNeuralPointRender(nn.Module):
 
         self.backbone = backbone
 
-        # if self.backbone == 'squeezenet':
-        #     model = squeezenet1_1(pretrained=False)
-        #     # model.load_state_dict(
-        #     #     torch.load('./pretrained_models/squeezenet1_1-b8a52dc0.pth'))
-        #     self.backbone = nn.Sequential(*list(model.children())[0][:12])
-        #     self.feature_dim = 512
-        #
-        # elif self.backbone == 'mobilenet':
-        #     model = models.mobilenet_v3_small(pretrained=False)
-        #     model.load_state_dict(
-        #         torch.load('/apdcephfs/share_1290939/shadowcun/pretrained/mobilenet_v3_small-047dcff4.pth'))
-        #     self.backbone = nn.Sequential(*list(model.features))
-        #     # import pdb; pdb.set_trace()
-        #     self.feature_dim = 576
-        # elif self.backbone == 'eb0':
-        #     model = models.efficientnet_b0(pretrained=False)
-        #     model.load_state_dict(
-        #         torch.load('/apdcephfs/share_1290939/shadowcun/pretrained/efficientnet_b0_rwightman-3dd342df.pth'))
-        #     self.backbone = nn.Sequential(*list(model.features))
-        #     # import pdb; pdb.set_trace()
-        #     self.feature_dim = 1280
-        # else:
-        #     raise 'error'
-        self.feature_dim = 512
+        if self.backbone == 'squeezenet':
+            model = squeezenet1_1(pretrained=False)
+            # model.load_state_dict(
+            #     torch.load('./pretrained_models/squeezenet1_1-b8a52dc0.pth'))
+            self.backbone = nn.Sequential(*list(model.children())[0][:12])
+            self.feature_dim = 512
+
+        elif self.backbone == 'mobilenet':
+            model = models.mobilenet_v3_small(pretrained=False)
+            model.load_state_dict(
+                torch.load('/apdcephfs/share_1290939/shadowcun/pretrained/mobilenet_v3_small-047dcff4.pth'))
+            self.backbone = nn.Sequential(*list(model.features))
+            # import pdb; pdb.set_trace()
+            self.feature_dim = 576
+        elif self.backbone == 'eb0':
+            model = models.efficientnet_b0(pretrained=False)
+            model.load_state_dict(
+                torch.load('/apdcephfs/share_1290939/shadowcun/pretrained/efficientnet_b0_rwightman-3dd342df.pth'))
+            self.backbone = nn.Sequential(*list(model.features))
+            # import pdb; pdb.set_trace()
+            self.feature_dim = 1280
+        else:
+            raise 'error'
         self.plane = plane
         # 512 -> 192
         self.fc_f = nn.Linear(self.feature_dim, plane)  # bs x 3 x 64 #
@@ -1045,24 +1044,21 @@ class CreateNetNeuralPointRender(nn.Module):
         # mlp mapping
         self.mlp = ResMLP(plane + ic, ic, [plane] * stage, act) if resmlp else MLP(plane + ic, ic, [plane] * stage, act)
 
-    def forward(self, x, f_feature, b_feature):
-        # x, m = x[:, 0:3], x[:, 3:]
-        # fx, fm = fore[:, 0:3], fore[:, 3:]
+    def forward(self, x, fore):
+        x, m = x[:, 0:3], x[:, 3:]
+        fx, fm = fore[:, 0:3], fore[:, 3:]
         bs, c, h, w = x.size()
         #
-        # if self.use_norm:
-        #     x = self.norm(x)
-        #     fx = self.norm(fx)
-        #
-        # f = torch.cat([fx * fm, x * (1 - m)], dim=0)
-        # feature = self.backbone(f)
-        # f_feature, b_feature = torch.split(feature, feature.size(0) // 2, dim=0)
-        #
-        # self.f_feature = F.adaptive_avg_pool2d(f_feature, 1).view(x.size(0), -1)
-        # self.b_feature = F.adaptive_avg_pool2d(b_feature, 1).view(x.size(0), -1)
+        if self.use_norm:
+            x = self.norm(x)
+            fx = self.norm(fx)
 
-        self.f_feature = f_feature
-        self.b_feature = b_feature
+        f = torch.cat([fx * fm, x * (1 - m)], dim=0)
+        feature = self.backbone(f)
+        f_feature, b_feature = torch.split(feature, feature.size(0) // 2, dim=0)
+
+        self.f_feature = F.adaptive_avg_pool2d(f_feature, 1).view(x.size(0), -1)
+        self.b_feature = F.adaptive_avg_pool2d(b_feature, 1).view(x.size(0), -1)
 
         self.param_f = self.fc_f(self.f_feature)
 
