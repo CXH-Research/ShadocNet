@@ -126,10 +126,7 @@ class SSCurveNet(nn.Module):
         inp_fore = torch.cat((inp, foremas), dim=1)
         inp_back = torch.cat((inp, mas), dim=1)
 
-        res_fore = self.fuse_foward(inp, inp_fore)
-        res_back = self.fuse_foward(inp, inp_back)
-
-        res = (res_fore + res_back) / 2
+        res = self.fuse_foward(inp_back, inp_fore)
 
         loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
         loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
