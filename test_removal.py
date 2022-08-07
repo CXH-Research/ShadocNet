@@ -49,12 +49,12 @@ for dataset in datasets:
 
             input_ = data_test[0].cuda()
             target = data_test[1].cuda()
-            # mask = data_test[2].cuda()
+            gt_mas = data_test[2].cuda()
             mask = detect(input_)['attn']
             filenames = data_test[3]
             foremas = 1 - mask
 
-            restored, _ = remove(input_, mask, foremas, target)
+            restored, _ = remove(input_, gt_mas, mask, foremas, target)
 
             save_image(restored, os.path.join(result_dir, filenames[0]))
 
