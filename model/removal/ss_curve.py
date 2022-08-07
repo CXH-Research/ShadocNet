@@ -136,24 +136,26 @@ class SSCurveNet(nn.Module):
 
         loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
 
-        [finalrgb, side0_rgb, side1_rgb, side2_rgb], [finalmask, side0_mask, side1_mask, side2_mask] = self.refine_forward(res)
+        finalrgb, finalmask = self.refine_forward(res)
 
-        loss_l1_1 = self.criterion_l1(finalrgb, tar)
-        loss_l1_2 = self.criterion_l1(side0_rgb, tar)
-        loss_l1_3 = self.criterion_l1(side1_rgb, tar)
-        loss_l1_4 = self.criterion_l1(side2_rgb, tar)
+        loss_l1_1 = self.criterion_l1(finalrgb[0], tar)
+        loss_l1_2 = self.criterion_l1(finalrgb[1], tar)
+        loss_l1_3 = self.criterion_l1(finalrgb[2], tar)
+        loss_l1_4 = self.criterion_l1(finalrgb[3], tar)
+        loss_l1_5 = self.criterion_l1(finalrgb[4], tar)
 
-        loss_l1 = loss_l1_1 + loss_l1_2 + loss_l1_3 + loss_l1_4
+        loss_l1 = loss_l1_1 + loss_l1_2 + loss_l1_3 + loss_l1_4 + loss_l1_5
 
-        loss_l1_mask_1 = self.criterion_mask(torch.sigmoid(finalmask), gt_mas)
-        loss_l1_mask_2 = self.criterion_mask(torch.sigmoid(side0_mask), gt_mas)
-        loss_l1_mask_3 = self.criterion_mask(torch.sigmoid(side1_mask), gt_mas)
-        loss_l1_mask_4 = self.criterion_mask(torch.sigmoid(side2_mask), gt_mas)
+        loss_l1_mask_1 = self.criterion_mask(torch.sigmoid(finalmask[0]), gt_mas)
+        loss_l1_mask_2 = self.criterion_mask(torch.sigmoid(finalmask[1]), gt_mas)
+        loss_l1_mask_3 = self.criterion_mask(torch.sigmoid(finalmask[2]), gt_mas)
+        loss_l1_mask_4 = self.criterion_mask(torch.sigmoid(finalmask[3]), gt_mas)
+        loss_l1_mask_5 = self.criterion_mask(torch.sigmoid(finalmask[4]), gt_mas)
 
-        loss_mask = loss_l1_mask_1 + loss_l1_mask_2 + loss_l1_mask_3 + loss_l1_mask_4
+        loss_mask = loss_l1_mask_1 + loss_l1_mask_2 + loss_l1_mask_3 + loss_l1_mask_4 + loss_l1_mask_5
 
         loss_perc = self.criterion_perc(finalrgb, tar)
 
-        loss += loss_l1 + 0.04 * loss_perc
+        loss += loss_l1 + loss_mask + 0.04 * loss_perc
 
         return res, loss

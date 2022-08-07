@@ -297,11 +297,11 @@ class ShadowRemovalV2(nn.Module):
         self.aggreation3_rgb = Aggreation(in_channels=channels * 4, out_channels=channels)
         self.aggreation3_mas = Aggreation(in_channels=channels * 4, out_channels=channels)
 
-        self.side_3_rgb = nn.Conv2d(in_channels=9, out_channels=1, kernel_size=1, stride=1)
-        self.side_3_mask = nn.Conv2d(in_channels=3, out_channels=1, kernel_size=1, stride=1)
+        self.side_3_rgb = nn.Conv2d(in_channels=channels, out_channels=3, kernel_size=1, stride=1)
+        self.side_3_mas = nn.Conv2d(in_channels=channels, out_channels=1, kernel_size=1, stride=1)
 
-        self.final_rgb = nn.Conv2d(in_channels=channels, out_channels=3, kernel_size=1, stride=1)
-        self.final_mask = nn.Conv2d(in_channels=channels, out_channels=1, kernel_size=1, stride=1)
+        self.final_rgb = nn.Conv2d(in_channels=12, out_channels=3, kernel_size=1, stride=1)
+        self.final_mask = nn.Conv2d(in_channels=4, out_channels=1, kernel_size=1, stride=1)
 
     def forward(self, x):
         out = self.fusion(x)
@@ -332,20 +332,22 @@ class ShadowRemovalV2(nn.Module):
 
         agg2_rgb = self.aggreation2_rgb(torch.cat((agg1_rgb, out2_1, out2_2), dim=1))
         agg2_mas = self.aggreation2_mas(torch.cat((agg1_mas, out2_1, out2_2), dim=1))
-        out2 = agg1_rgb * torch.sigmoid(agg1_mas)
+        out3 = agg1_rgb * torch.sigmoid(agg1_mas)
         side2_mask = self.side_2_mas(out3)
         side2_rgb = self.side_2_rgb(out3)
 
         ##Stage3
-        out3_1 = self.block3_1(agg2_rgb)
+        out3_1 = self.block3_1(out3)
         out3_2 = self.block3_2(out3_1)
 
         agg3_rgb = self.aggreation3_rgb(torch.cat((agg1_rgb, agg2_rgb, out3_1, out3_2), dim=1))
         agg3_mas = self.aggreation3_mas(torch.cat((agg1_mas, agg2_mas, out3_1, out3_2), dim=1))
-        out3 = agg3_rgb * torch.sigmoid(agg3_mas)
+        out4 = agg3_rgb * torch.sigmoid(agg3_mas)
+        side3_mask = self.side_3_mas(out4)
+        side3_rgb = self.side_3_rgb(out4)
 
-        finalmask = self.final_mask(torch.cat([side0_mask, side1_mask, side2_mask], axis=1))
-        finalrgb = self.final_rgb(torch.cat([side0_rgb, side1_rgb, side2_rgb], axis=1))
+        finalmask = self.final_mask(torch.cat([side0_mask, side1_mask, side2_mask, side3_mask], axis=1))
+        finalrgb = self.final_rgb(torch.cat([side0_rgb, side1_rgb, side2_rgb, side3_rgb], axis=1))
 
-        return [finalrgb, side0_rgb, side1_rgb, side2_rgb], [finalmask, side0_mask, side1_mask, side2_mask]
-        # return finalrgb
+        return [finalrgb, side0_rgb, side1_rgb, side2_rgb, side3_rgb], [finalmask, side0_mask, side1_mask, side2_mask,
+                                                                        side3_mask]
