@@ -14,6 +14,7 @@ class SSCurveNet(nn.Module):
         super(SSCurveNet, self).__init__()
         self.criterion_l1_loss = losses.l1_relative
         self.criterion_perc = losses.Perceptual()
+        self.criterion_l1 = nn.L1Loss()
         # self.squeezenet1_1 = nn.Sequential(*list(model.children())[0][:12])
         self.fusion = CreateNetNeuralPointRender()
         # domain_conf = {
@@ -136,10 +137,9 @@ class SSCurveNet(nn.Module):
 
         res = self.refine_forward(res)
 
-        loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
-        loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
+        loss_l1 = self.criterion_l1(res, tar)
         loss_perc = self.criterion_perc(res, tar)
 
-        loss += loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
+        loss += loss_l1 + 0.04 * loss_perc
 
         return res, loss
