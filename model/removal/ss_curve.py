@@ -15,6 +15,7 @@ class SSCurveNet(nn.Module):
         self.criterion_l1_loss = losses.l1_relative
         self.criterion_perc = losses.Perceptual()
         self.criterion_l1 = nn.L1Loss()
+        self.criterion_mask = losses.MaskLoss()
         # self.squeezenet1_1 = nn.Sequential(*list(model.children())[0][:12])
         self.fusion = CreateNetNeuralPointRender()
         # domain_conf = {
@@ -99,7 +100,7 @@ class SSCurveNet(nn.Module):
     #
     #     return fg, bg
 
-    def forward(self, inp, mas, foremas, tar):  # two image for mixing
+    def forward(self, inp, gt_mas, mas, foremas, tar):  # two image for mixing
 
         # f_features, b_features = self.encode_forward(inp, mas, foremas)
 
@@ -135,10 +136,23 @@ class SSCurveNet(nn.Module):
 
         loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
 
-        res = self.refine_forward(res)
+        [finalrgb, side0_rgb, side1_rgb, side2_rgb], [finalmask, side0_mask, side1_mask, side2_mask] = self.refine_forward(res)
 
-        loss_l1 = self.criterion_l1(res, tar)
-        loss_perc = self.criterion_perc(res, tar)
+        loss_l1_1 = self.criterion_l1(finalrgb, tar)
+        loss_l1_2 = self.criterion_l1(side0_rgb, tar)
+        loss_l1_3 = self.criterion_l1(side1_rgb, tar)
+        loss_l1_4 = self.criterion_l1(side2_rgb, tar)
+
+        loss_l1 = loss_l1_1 + loss_l1_2 + loss_l1_3 + loss_l1_4
+
+        loss_l1_mask_1 = self.criterion_mask(torch.sigmoid(finalmask), gt_mas)
+        loss_l1_mask_2 = self.criterion_mask(torch.sigmoid(side0_mask), gt_mas)
+        loss_l1_mask_3 = self.criterion_mask(torch.sigmoid(side1_mask), gt_mas)
+        loss_l1_mask_4 = self.criterion_mask(torch.sigmoid(side2_mask), gt_mas)
+
+        loss_mask = loss_l1_mask_1 + loss_l1_mask_2 + loss_l1_mask_3 + loss_l1_mask_4
+
+        loss_perc = self.criterion_perc(finalrgb, tar)
 
         loss += loss_l1 + 0.04 * loss_perc
 

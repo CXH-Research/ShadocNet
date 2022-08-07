@@ -347,5 +347,5 @@ class ShadowRemovalV2(nn.Module):
         finalmask = self.final_mask(torch.cat([side0_mask, side1_mask, side2_mask], axis=1))
         finalrgb = self.final_rgb(torch.cat([side0_rgb, side1_rgb, side2_rgb], axis=1))
 
-        # return [finalrgb, side0_rgb, side1_rgb, side2_rgb], [finalmask, side0_mask, side1_mask, side2_mask]
-        return finalrgb
+        return [finalrgb, side0_rgb, side1_rgb, side2_rgb], [finalmask, side0_mask, side1_mask, side2_mask]
+        # return finalrgb

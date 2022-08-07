@@ -91,6 +91,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     for i, data in enumerate(tqdm(train_loader), 0):
         inp = data[0].to(device)
         tar = data[1].to(device)
+        gt_mas = data[2].to(device)
         mas = detect(inp)['attn']
         # mas = data[2].to(device)
         foremas = 1 - mas
@@ -102,7 +103,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # fore = torch.cat([inp, mas], dim=1).to(device)
         # feed = torch.cat([inp, foremas], dim=1).to(device)
 
-        out, loss = remove(inp, mas, foremas, tar)
+        out, loss = remove(inp, gt_mas, mas, foremas, tar)
 
         # loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc  # + 0.02 * loss_tv
 
