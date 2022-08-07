@@ -54,7 +54,7 @@ class SSCurveNet(nn.Module):
         # ckpt = torch.hub.load_state_dict_from_url(ckpt_url, map_location='cpu')
         # self.multimae.load_state_dict(ckpt['model'], strict=False)
 
-        self.refine = ShadowRemoval()
+        self.refine = ShadowRemovalV2()
         weights_init_normal(self.refine)
 
     def fuse_foward(self, inp, fore):
