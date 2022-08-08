@@ -117,10 +117,7 @@ class SSCurveNet(nn.Module):
         f_f, b_f = [], []
         for x, y in zip(f_features, b_features):
             temp_x = F.adaptive_avg_pool2d(x, (1, 512))
-            try:
-                temp_y = F.adaptive_avg_pool2d(y, (1, 512))
-            except RuntimeError:
-                print(y.shape)
+            temp_y = F.adaptive_avg_pool2d(y, (1, 512))
             f_f.append(temp_x.squeeze(0))
             b_f.append(temp_y.squeeze(0))
         f_f = torch.cat(f_f, 0)
@@ -157,9 +154,10 @@ class SSCurveNet(nn.Module):
         # loss_l1_mask_5 = self.criterion_mask(torch.sigmoid(side3_mask), gt_mas)
         #
         # loss_mask = loss_l1_mask_1 + loss_l1_mask_2 + loss_l1_mask_3 + loss_l1_mask_4 + loss_l1_mask_5
-        loss_l1 = self.criterion_l1_loss(res, tar, mas)
+        loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
+        loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
         loss_perc = self.criterion_perc(res, tar)
 
         # loss += loss_l1 + loss_mask + 0.04 * loss_perc
-        loss += loss_l1 + 0.04 * loss_perc
+        loss += loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
         return res, loss

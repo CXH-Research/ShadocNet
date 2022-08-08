@@ -996,7 +996,6 @@ class CreateNetNeuralPointRender(nn.Module):
                  use_fcb=True, use_norm=False):
         super(CreateNetNeuralPointRender, self).__init__()
 
-        self.backbone = backbone
         self.feature_dim = 512
         self.plane = plane
         # 512 -> 192
