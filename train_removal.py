@@ -112,7 +112,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
 
         # loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc  # + 0.02 * loss_tv
 
-        loss.backward()
+        loss.sum().backward()
         optimizer.step()
         epoch_loss += loss.item()
 
