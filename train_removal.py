@@ -1,5 +1,11 @@
 import os
 import random
+from config import Config
+opt = Config('remove.yml')
+
+gpus = ','.join([str(i) for i in opt.GPU])
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = gpus
 
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -7,16 +13,10 @@ from tqdm import tqdm
 from warmup_scheduler import GradualWarmupScheduler
 
 import utils
-from config import Config
 from data import get_training_data, get_validation_data
 from evaluation.removal import measure_all
 from model import *
 
-opt = Config('remove.yml')
-
-gpus = ','.join([str(i) for i in opt.GPU])
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = gpus
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Set Seeds #
@@ -47,9 +47,14 @@ remove = SSCurveNet()
 detect = DSDGenerator().cuda()
 detect.load_state_dict(torch.load('./pretrained_models/detect_best.pth')['state_dict'])
 detect.eval()
-remove.to(device)
+remove.cuda()
 
 new_lr = opt.OPTIM.LR_INITIAL
+
+device_ids = [i for i in range(torch.cuda.device_count())]
+if torch.cuda.device_count() > 1:
+    detect = torch.nn.DataParallel(detect, device_ids=device_ids)
+    remove = torch.nn.DataParallel(remove, device_ids=device_ids)
 
 params = list(remove.parameters())
 optimizer = optim.Adam(params, lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
@@ -89,9 +94,9 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     # Train #
     remove.train()
     for i, data in enumerate(tqdm(train_loader), 0):
-        inp = data[0].to(device)
-        tar = data[1].to(device)
-        gt_mas = data[2].to(device)
+        inp = data[0].cuda()
+        tar = data[1].cuda()
+        gt_mas = data[2].cuda()
         mas = detect(inp)['attn']
         # mas = data[2].to(device)
         foremas = 1 - mas
