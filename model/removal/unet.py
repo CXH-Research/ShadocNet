@@ -1022,6 +1022,8 @@ class CreateNetNeuralPointRender(nn.Module):
 
     def forward(self, x, f_feature, b_feature):
 
+        bs, c, h, w = x.size()
+
         self.f_feature = f_feature
         self.b_feature = b_feature
 
