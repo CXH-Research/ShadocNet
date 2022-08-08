@@ -1022,8 +1022,8 @@ class CreateNetNeuralPointRender(nn.Module):
 
     def forward(self, x, f_feature, b_feature):
 
-        self.f_feature = F.adaptive_avg_pool2d(f_feature, 1).view(x.size(0), -1)
-        self.b_feature = F.adaptive_avg_pool2d(b_feature, 1).view(x.size(0), -1)
+        self.f_feature = f_feature
+        self.b_feature = b_feature
 
         self.param_f = self.fc_f(self.f_feature)
 
