@@ -84,7 +84,8 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZ
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_rmse = 10000
+best_psnr = 0
+best_ssim = 0
 best_epoch = 1
 
 for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
@@ -120,8 +121,9 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
     if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
         remove.eval()
         rmse, psnr, ssim = measure_all(detect, remove, val_loader)
-        if rmse < best_rmse:
-            best_rmse = rmse
+        if psnr > best_psnr and ssim > best_ssim:
+            best_psnr = psnr
+            best_ssim = ssim
             best_epoch = epoch
             torch.save({
                 'epoch': best_epoch,
@@ -129,7 +131,7 @@ for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
                 'optimizer': optimizer.state_dict()
             }, os.path.join('pretrained_models', "model_best.pth"))
 
-        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_RMSE %.4f]" % (epoch, rmse, best_epoch, best_rmse))
+        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_PSNR %.4f Best_SSIM %.4f]" % (epoch, rmse, best_epoch, best_psnr, best_ssim))
 
     scheduler.step()
     print("------------------------------------------------------------------")
