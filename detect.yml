@@ -8,9 +8,9 @@ VERBOSE: True
 
 # Optimization arguments.
 OPTIM:
-  TRAIN_BATCH_SIZE: 4
+  TRAIN_BATCH_SIZE: 2
   TEST_BATCH_SIZE: 1
-  NUM_EPOCHS: 1500
+  NUM_EPOCHS: 500
   # NEPOCH_DECAY: [10]
   LR_INITIAL: 2e-4
   LR_MIN: 1e-6
@@ -19,8 +19,8 @@ OPTIM:
 TRAINING:
   VAL_AFTER_EVERY: 1
   RESUME: False
-  TRAIN_PS: 1024
-  VAL_PS: 1024
-  TRAIN_DIR: '../RGB/train'       # path to training data
-  VAL_DIR: '../RGB/test' # path to validation data
+  TRAIN_PS: 256
+  VAL_PS: 256
+  TRAIN_DIR: '../Shadoc/train'       # path to training data
+  VAL_DIR: '../Shadoc/test' # path to validation data
 #  SAVE_DIR: './checkpoints'           # path to save models and images

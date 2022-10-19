@@ -92,11 +92,11 @@ criterion_l1 = torch.nn.L1Loss()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
-train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.TRAIN_BATCH_SIZE, shuffle=True, num_workers=16,
+train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.TRAIN_BATCH_SIZE, shuffle=True, num_workers=0,
                           drop_last=False, pin_memory=True)
 
 val_dataset = get_validation_data(val_dir, {'patch_size': opt.TRAINING.VAL_PS})
-val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZE, shuffle=False, num_workers=16,
+val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZE, shuffle=False, num_workers=0,
                         drop_last=False,
                         pin_memory=True)
 
@@ -105,64 +105,71 @@ print('===> Loading datasets')
 
 best_ber = 100
 best_epoch = 1
-for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
-    epoch_start_time = time.time()
-    epoch_loss = 0
-    train_id = 1
 
-    # Train #
-    model.train()
-    for i, data in enumerate(tqdm(train_loader), 0):
-        inp = data[0].cuda()
-        mas = data[2].cuda()
 
-        # --- Zero the parameter gradients --- #
-        optimizer.zero_grad()
+def main():
+    for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
+        epoch_start_time = time.time()
+        epoch_loss = 0
+        train_id = 1
 
-        # --- Forward + Backward + Optimize --- #
-        pred = model(inp)['attn']
+        # Train #
+        model.train()
+        for i, data in enumerate(tqdm(train_loader), 0):
+            inp = data[0].cuda()
+            mas = data[2].cuda()
 
-        loss = criterion_bce(pred, mas)
+            # --- Zero the parameter gradients --- #
+            optimizer.zero_grad()
 
-        loss.backward()
-        optimizer.step()
-        epoch_loss += loss.item()
+            # --- Forward + Backward + Optimize --- #
+            pred = model(inp)['attn']
 
-    # Evaluation #
-    if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
+            loss = criterion_bce(pred, mas)
 
-        model.eval()
-        average_ber = 0.0
-        average_accuracy = 0.0
-        sum_ber = 0.0
-        sum_accuracy = 0.0
-        with torch.no_grad():
-            for i, data in enumerate(tqdm(val_loader), 0):
-                inp = data[0].cuda()
-                mas = data[2].cuda()
-                res = model(inp)['attn']
-                save_image(res, 'pred_mask.png')
-                save_image(mas, 'gt_mask.png')
-                predict = cv2.imread('pred_mask.png', cv2.IMREAD_GRAYSCALE)
-                label = cv2.imread('gt_mask.png', cv2.IMREAD_GRAYSCALE)
-                score, accuracy = BER(torch.from_numpy(label).float(), torch.from_numpy(predict).float())
-                sum_ber += score
-                average_ber = sum_ber / (i + 1)
-                sum_accuracy += accuracy
-                average_accuracy = sum_accuracy / (i + 1)
-        print(f"Got BER {average_ber:.2f}, acc {average_accuracy:.2f}")
-        if average_ber < best_ber:
-            best_ber = average_ber
-            best_epoch = epoch
-            torch.save({
-                'epoch': best_epoch,
-                'state_dict': model.state_dict(),
-                'optimizer': optimizer.state_dict()
-            }, os.path.join('pretrained_models', "detect_best.pth"))
-        print(f"Best epoch : {best_epoch}, Best BER : {best_ber}")
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
 
-    scheduler.step()
-    print("------------------------------------------------------------------")
-    print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.8f}".format(epoch, time.time() - epoch_start_time,
-                                                                              epoch_loss, scheduler.get_lr()[0]))
-    print("------------------------------------------------------------------")
+        # Evaluation #
+        if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
+
+            model.eval()
+            average_ber = 0.0
+            average_accuracy = 0.0
+            sum_ber = 0.0
+            sum_accuracy = 0.0
+            with torch.no_grad():
+                for i, data in enumerate(tqdm(val_loader), 0):
+                    inp = data[0].cuda()
+                    mas = data[2].cuda()
+                    res = model(inp)['attn']
+                    save_image(res, 'pred_mask.png')
+                    save_image(mas, 'gt_mask.png')
+                    predict = cv2.imread('pred_mask.png', cv2.IMREAD_GRAYSCALE)
+                    label = cv2.imread('gt_mask.png', cv2.IMREAD_GRAYSCALE)
+                    score, accuracy = BER(torch.from_numpy(label).float(), torch.from_numpy(predict).float())
+                    sum_ber += score
+                    average_ber = sum_ber / (i + 1)
+                    sum_accuracy += accuracy
+                    average_accuracy = sum_accuracy / (i + 1)
+            print(f"Got BER {average_ber:.2f}, acc {average_accuracy:.2f}")
+            if average_ber < best_ber:
+                best_ber = average_ber
+                best_epoch = epoch
+                torch.save({
+                    'epoch': best_epoch,
+                    'state_dict': model.state_dict(),
+                    'optimizer': optimizer.state_dict()
+                }, os.path.join('pretrained_models', "detect_best.pth"))
+            print(f"Best epoch : {best_epoch}, Best BER : {best_ber}")
+
+        scheduler.step()
+        print("------------------------------------------------------------------")
+        print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.8f}".format(epoch, time.time() - epoch_start_time,
+                                                                                  epoch_loss, scheduler.get_lr()[0]))
+        print("------------------------------------------------------------------")
+
+
+if __name__ == '__main__':
+    main()

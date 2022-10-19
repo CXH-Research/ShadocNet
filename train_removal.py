@@ -1,6 +1,7 @@
 import os
 import random
 from config import Config
+
 opt = Config('remove.yml')
 
 gpus = ','.join([str(i) for i in opt.GPU])
@@ -73,11 +74,11 @@ criterion_perc = losses.Perceptual()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
-train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.TRAIN_BATCH_SIZE, shuffle=True, num_workers=16,
+train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.TRAIN_BATCH_SIZE, shuffle=True, num_workers=0,
                           drop_last=False, pin_memory=True)
 
 val_dataset = get_validation_data(val_dir, {'patch_size': opt.TRAINING.VAL_PS})
-val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZE, shuffle=False, num_workers=16,
+val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZE, shuffle=False, num_workers=0,
                         drop_last=False,
                         pin_memory=True)
 
@@ -88,53 +89,60 @@ best_psnr = 0
 best_ssim = 0
 best_epoch = 1
 
-for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
-    epoch_start_time = time.time()
-    epoch_loss = 0
 
-    # Train #
-    remove.train()
-    for i, data in enumerate(tqdm(train_loader), 0):
-        inp = data[0].cuda()
-        tar = data[1].cuda()
-        gt_mas = data[2].cuda()
-        mas = detect(inp)['attn']
-        # mas = data[2].to(device)
-        foremas = 1 - mas
+def main():
+    for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
+        epoch_start_time = time.time()
+        epoch_loss = 0
 
-        # --- Zero the parameter gradients --- #
-        optimizer.zero_grad()
+        # Train #
+        remove.train()
+        for i, data in enumerate(tqdm(train_loader), 0):
+            inp = data[0].cuda()
+            tar = data[1].cuda()
+            gt_mas = data[2].cuda()
+            mas = detect(inp)['attn']
+            # mas = data[2].to(device)
+            foremas = 1 - mas
 
-        # --- Forward + Backward + Optimize --- #
-        # fore = torch.cat([inp, mas], dim=1).to(device)
-        # feed = torch.cat([inp, foremas], dim=1).to(device)
+            # --- Zero the parameter gradients --- #
+            optimizer.zero_grad()
 
-        out, loss = remove(inp, gt_mas, mas, foremas, tar)
+            # --- Forward + Backward + Optimize --- #
+            # fore = torch.cat([inp, mas], dim=1).to(device)
+            # feed = torch.cat([inp, foremas], dim=1).to(device)
 
-        # loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc  # + 0.02 * loss_tv
+            out, loss = remove(inp, gt_mas, mas, foremas, tar)
 
-        loss.sum().backward()
-        optimizer.step()
-        epoch_loss += loss.item()
+            # loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc  # + 0.02 * loss_tv
 
-    # Evaluation #
-    if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
-        remove.eval()
-        rmse, psnr, ssim = measure_all(detect, remove, val_loader)
-        if psnr > best_psnr and ssim > best_ssim:
-            best_psnr = psnr
-            best_ssim = ssim
-            best_epoch = epoch
-            torch.save({
-                'epoch': best_epoch,
-                'state_dict': remove.state_dict(),
-                'optimizer': optimizer.state_dict()
-            }, os.path.join('pretrained_models', "model_best.pth"))
+            loss.sum().backward()
+            optimizer.step()
+            epoch_loss += loss.item()
 
-        print("[epoch %d RMSE: %.4f --- best_epoch %d Best_PSNR %.4f Best_SSIM %.4f]" % (epoch, rmse, best_epoch, best_psnr, best_ssim))
+        # Evaluation #
+        if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
+            remove.eval()
+            rmse, psnr, ssim = measure_all(detect, remove, val_loader)
+            if psnr > best_psnr and ssim > best_ssim:
+                best_psnr = psnr
+                best_ssim = ssim
+                best_epoch = epoch
+                torch.save({
+                    'epoch': best_epoch,
+                    'state_dict': remove.state_dict(),
+                    'optimizer': optimizer.state_dict()
+                }, os.path.join('pretrained_models', "model_best.pth"))
 
-    scheduler.step()
-    print("------------------------------------------------------------------")
-    print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.8f}".format(epoch, time.time() - epoch_start_time,
-                                                                              epoch_loss, scheduler.get_lr()[0]))
-    print("------------------------------------------------------------------")
+            print("[epoch %d RMSE: %.4f --- best_epoch %d Best_PSNR %.4f Best_SSIM %.4f]" % (
+            epoch, rmse, best_epoch, best_psnr, best_ssim))
+
+        scheduler.step()
+        print("------------------------------------------------------------------")
+        print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.8f}".format(epoch, time.time() - epoch_start_time,
+                                                                                  epoch_loss, scheduler.get_lr()[0]))
+        print("------------------------------------------------------------------")
+
+
+if __name__ == '__main__':
+    main()
