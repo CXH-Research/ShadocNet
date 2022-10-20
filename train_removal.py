@@ -1,5 +1,5 @@
 import os
-import random
+
 from config import Config
 
 opt = Config('remove.yml')
@@ -21,11 +21,7 @@ from model import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Set Seeds #
-random.seed(1234)
-np.random.seed(1234)
-torch.manual_seed(1234)
-torch.cuda.manual_seed_all(1234)
-torch.backends.cudnn.benchmark = True
+utils.seed_everything(3407)
 
 start_epoch = 1
 mode = opt.MODEL.MODE

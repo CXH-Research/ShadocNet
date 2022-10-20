@@ -1,35 +1,30 @@
 import os
-import random
 import time
 
-import numpy as np
-import cv2
-import torch
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-from warmup_scheduler import GradualWarmupScheduler
-
-import utils
 from config import Config
-from data import get_training_data, get_validation_data
-from torchvision.utils import save_image
-from model import DSDGenerator
-from evaluation.ber import BER
-from losses import MaskLoss, DiceLoss
 
 opt = Config('detect.yml')
-
 gpus = ','.join([str(i) for i in opt.GPU])
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = gpus
 
+import cv2
+import torch
+import torch.optim as optim
+from torch.utils.data import DataLoader
+from torchvision.utils import save_image
+from tqdm import tqdm
+from warmup_scheduler import GradualWarmupScheduler
+
+import utils
+
+from data import get_training_data, get_validation_data
+from evaluation.ber import BER
+from losses import MaskLoss, DiceLoss
+from model import DSDGenerator
+
 # Set Seeds #
-random.seed(1234)
-np.random.seed(1234)
-torch.manual_seed(1234)
-torch.cuda.manual_seed_all(1234)
-torch.backends.cudnn.benchmark = True
+utils.seed_everything(3407)
 
 start_epoch = 1
 mode = opt.MODEL.MODE
