@@ -16,6 +16,7 @@ from data import get_training_data, get_validation_data
 from torchvision.utils import save_image
 from model import DSDGenerator
 from evaluation.ber import BER
+from losses import MaskLoss, DiceLoss
 
 opt = Config('detect.yml')
 
@@ -87,8 +88,10 @@ scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_e
 scheduler.step()
 
 # Loss #
-criterion_bce = torch.nn.BCEWithLogitsLoss()
-criterion_l1 = torch.nn.L1Loss()
+# criterion_bce = torch.nn.BCEWithLogitsLoss()
+# criterion_mse = torch.nn.MSELoss()
+criterion_mask = MaskLoss()
+criterion_dice = DiceLoss()
 
 # DataLoaders #
 train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
@@ -103,11 +106,10 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZ
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_ber = 100
-best_epoch = 1
-
 
 def main():
+    best_ber = 100
+    best_epoch = 1
     for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         epoch_start_time = time.time()
         epoch_loss = 0
@@ -125,7 +127,7 @@ def main():
             # --- Forward + Backward + Optimize --- #
             pred = model(inp)['attn']
 
-            loss = criterion_bce(pred, mas)
+            loss = criterion_mask(pred, mas) + criterion_dice(pred, mas)
 
             loss.backward()
             optimizer.step()
