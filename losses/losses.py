@@ -51,6 +51,20 @@ def l1_relative(reconstructed, real, mask):
     return loss_l1
 
 
+# --- Charbonnier Loss (L1) --- #
+class CharbonnierLoss(torch.nn.Module):
+
+    def __init__(self, eps=1e-3):
+        super(CharbonnierLoss, self).__init__()
+        self.eps = eps
+
+    def forward(self, x, y):
+        diff = x - y
+        # loss = torch.sum(torch.sqrt(diff * diff + self.eps))
+        loss = torch.mean(torch.sqrt((diff * diff) + (self.eps * self.eps)))
+        return loss
+
+
 # --- Edge Loss --- #
 class EdgeLoss(torch.nn.Module):
     def __init__(self):
