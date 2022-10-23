@@ -14,7 +14,7 @@ class SSCurveNet(nn.Module):
         super(SSCurveNet, self).__init__()
         self.criterion_l1_loss = losses.l1_relative
         self.criterion_perc = losses.Perceptual()
-        self.criterion_l1 = nn.L1Loss()
+        self.criterion_mse = nn.MSELoss()
         self.criterion_mask = losses.MaskLoss()
         # self.squeezenet1_1 = nn.Sequential(*list(model.children())[0][:12])
         self.fusion = CreateNetNeuralPointRender()
@@ -134,11 +134,13 @@ class SSCurveNet(nn.Module):
 
         res = self.fuse_foward(inp, f_f, b_f)
 
-        loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
-        loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
+        # loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
+        # loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
+        loss_mse = self.criterion_mse(res, tar)
         loss_perc = self.criterion_perc(res, tar)
 
-        loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
+        # loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
+        loss = loss_mse + 0.04 * loss_perc
 
         res = self.refine_forward(res)
         # finalrgb, side0_rgb, side1_rgb, side2_rgb, side3_rgb, finalmask, side0_mask, side1_mask, side2_mask, side3_mask = self.refine_forward(res)
@@ -158,10 +160,12 @@ class SSCurveNet(nn.Module):
         # loss_l1_mask_5 = self.criterion_mask(torch.sigmoid(side3_mask), gt_mas)
         #
         # loss_mask = loss_l1_mask_1 + loss_l1_mask_2 + loss_l1_mask_3 + loss_l1_mask_4 + loss_l1_mask_5
-        loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
-        loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
+        # loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
+        # loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
+        loss_mse = self.criterion_mse(res, tar)
         loss_perc = self.criterion_perc(res, tar)
 
         # loss += loss_l1 + loss_mask + 0.04 * loss_perc
-        loss += loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
+        # loss += loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc
+        loss = loss_mse + 0.04 * loss_perc
         return res, loss
