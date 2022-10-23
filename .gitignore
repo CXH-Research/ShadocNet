@@ -1,5 +1,6 @@
 # sample images
 *.png
+*.yml
 
 # datasets
 dataset/

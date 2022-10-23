@@ -8,6 +8,10 @@ gpus = ','.join([str(i) for i in opt.GPU])
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = gpus
 
+import warnings
+
+warnings.filterwarnings('ignore')
+
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -76,12 +80,11 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZ
 print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
 print('===> Loading datasets')
 
-best_psnr = 0
-best_ssim = 0
-best_epoch = 1
-
 
 def main():
+    best_psnr = 0
+    best_ssim = 0
+    best_epoch = 1
     for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         epoch_start_time = time.time()
         epoch_loss = 0
@@ -126,7 +129,7 @@ def main():
                 }, os.path.join('pretrained_models', "model_best.pth"))
 
             print("[epoch %d RMSE: %.4f --- best_epoch %d Best_PSNR %.4f Best_SSIM %.4f]" % (
-            epoch, rmse, best_epoch, best_psnr, best_ssim))
+                epoch, rmse, best_epoch, best_psnr, best_ssim))
 
         scheduler.step()
         print("------------------------------------------------------------------")
