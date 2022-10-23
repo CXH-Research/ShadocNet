@@ -137,7 +137,7 @@ class SSCurveNet(nn.Module):
 
         # loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
         # loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
-        loss_mse = self.criterion_mse_mask(res, tar, mas)
+        loss_mse = self.criterion_mse_mask(res, tar, mas.type(torch.int64))
         loss_perc = self.criterion_perc(res, tar)
         loss_edge = self.criterion_edge(res, tar)
         loss_ssim = self.criterion_ssim(res, tar)
@@ -165,7 +165,7 @@ class SSCurveNet(nn.Module):
         # loss_mask = loss_l1_mask_1 + loss_l1_mask_2 + loss_l1_mask_3 + loss_l1_mask_4 + loss_l1_mask_5
         # loss_rl1_1 = self.criterion_l1_loss(res, tar, mas)
         # loss_rl1_2 = self.criterion_l1_loss(res, tar, foremas)
-        loss_mse = self.criterion_mse_mask(res, tar, mas)
+        loss_mse = self.criterion_mse_mask(res, tar, mas.type(torch.int64))
         loss_perc = self.criterion_perc(res, tar)
         loss_edge = self.criterion_edge(res, tar)
         loss_ssim = self.criterion_ssim(res, tar)
