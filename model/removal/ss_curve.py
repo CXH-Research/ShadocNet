@@ -75,11 +75,11 @@ class SSCurveNet(nn.Module):
             mas_batch = mas[bs].unsqueeze(0)
             foremas_batch = foremas[bs].unsqueeze(0)
 
-            mas_mae = F.interpolate(mas_batch, (32, 32))
+            mas_mae = F.interpolate(mas_batch, (16, 16))
             mas_mae = mas_mae.cpu().detach().numpy()
             mas_mae = torch.LongTensor(mas_mae).flatten()[None].cuda()
 
-            foremas_mae = F.interpolate(foremas_batch, (32, 32))
+            foremas_mae = F.interpolate(foremas_batch, (16, 16))
             foremas_mae = foremas_mae.cpu().detach().numpy()
             foremas_mae = torch.LongTensor(foremas_mae).flatten()[None].cuda()
 
