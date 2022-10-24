@@ -9,12 +9,15 @@ from tqdm import tqdm
 import utils
 from data import get_test_data
 from model import *
+from config import Config
+
+opt = Config('detect.yml')
 
 parser = argparse.ArgumentParser(description='Shadow Removal')
 
 parser.add_argument('--input_dir', default='../', type=str, help='Directory of validation images')
 parser.add_argument('--result_dir', default='./results/', type=str, help='Directory for results')
-parser.add_argument('--weights', default='./pretrained_models/model_best.pth', type=str, help='Path to weights')
+parser.add_argument('--weights', default='./pretrained_models/remove_' + opt.TRAINING.VAL_DIR + '.pth', type=str, help='Path to weights')
 parser.add_argument('--gpus', default='0', type=str, help='CUDA_VISIBLE_DEVICES')
 
 args = parser.parse_args()
@@ -28,14 +31,14 @@ print("===>Testing using weights: ", args.weights)
 remove.cuda()
 remove.eval()
 detect = DSDGenerator().cuda()
-detect.load_state_dict(torch.load('./pretrained_models/detect_best.pth')['state_dict'])
+detect.load_state_dict(torch.load('./pretrained_models/detect_' + opt.TRAINING.VAL_DIR + '.pth')['state_dict'])
 detect.eval()
 
-datasets = ['RGB', 'Jung', 'Kligler']
+datasets = [opt.TRAINING.VAL_DIR]
 
 for dataset in datasets:
     dir_test = os.path.join(args.input_dir, dataset, 'test')
-    test_dataset = get_test_data(dir_test, img_options={'patch_size': 512})
+    test_dataset = get_test_data(dir_test, img_options={'patch_size': 256})
     test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False, num_workers=16, drop_last=False,
                              pin_memory=True)
 

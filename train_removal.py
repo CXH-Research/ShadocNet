@@ -38,15 +38,15 @@ session = opt.MODEL.SESSION
 # utils.mkdir(model_dir)
 utils.mkdir('pretrained_models')
 
-train_dir = opt.TRAINING.TRAIN_DIR
-val_dir = opt.TRAINING.VAL_DIR
+train_dir = os.path.join('..', opt.TRAINING.TRAIN_DIR, 'train')
+val_dir = os.path.join('..', opt.TRAINING.VAL_DIR, 'test')
 
 # Model #
 # f_net = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False).to(device)
 # f_net.load_state_dict(torch.load('./pretrained_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
 remove = SSCurveNet()
 detect = DSDGenerator().cuda()
-detect.load_state_dict(torch.load('./pretrained_models/detect_best.pth')['state_dict'])
+detect.load_state_dict(torch.load('./pretrained_models/detect_' + opt.TRAINING.VAL_DIR + '.pth')['state_dict'])
 detect.eval()
 remove.cuda()
 
@@ -126,7 +126,7 @@ def main():
                     'epoch': best_epoch,
                     'state_dict': remove.state_dict(),
                     'optimizer': optimizer.state_dict()
-                }, os.path.join('pretrained_models', "model_best.pth"))
+                }, os.path.join('pretrained_models', "remove_" + opt.TRAINING.TRAIN_DIR + ".pth"))
 
             print("[epoch %d RMSE: %.4f --- best_epoch %d Best_PSNR %.4f Best_SSIM %.4f]" % (
                 epoch, rmse, best_epoch, best_psnr, best_ssim))

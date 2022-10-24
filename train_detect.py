@@ -32,8 +32,8 @@ session = opt.MODEL.SESSION
 
 utils.mkdir('pretrained_models')
 
-train_dir = opt.TRAINING.TRAIN_DIR
-val_dir = opt.TRAINING.VAL_DIR
+train_dir = os.path.join('..', opt.TRAINING.TRAIN_DIR, 'train')
+val_dir = os.path.join('..', opt.TRAINING.VAL_DIR, 'test')
 
 # Model #
 hr_config = {'NUM_CLASSES': 1, 'PRETRAINED': None, 'MODEL': {'EXTRA': {'FINAL_CONV_KERNEL': 1,
@@ -158,7 +158,7 @@ def main():
                     'epoch': best_epoch,
                     'state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict()
-                }, os.path.join('pretrained_models', "detect_best.pth"))
+                }, os.path.join('pretrained_models', "detect_" + opt.TRAINING.TRAIN_DIR + ".pth"))
             print(f"Best epoch : {best_epoch}, Best BER : {best_ber}")
 
         scheduler.step()
