@@ -8,6 +8,10 @@ gpus = ','.join([str(i) for i in opt.GPU])
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = gpus
 
+import warnings
+
+warnings.filterwarnings('ignore')
+
 import cv2
 import torch
 import torch.optim as optim
