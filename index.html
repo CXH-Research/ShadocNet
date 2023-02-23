@@ -42,6 +42,15 @@
   <script src="static/js/bulma-carousel.min.js"></script>
   <script src="static/js/bulma-slider.min.js"></script>
   <script src="static/js/index.js"></script>
+  <style>
+    figure {
+        width: 12.5%;
+        float: left;
+        margin: 0;
+        text-align: center;
+        padding: 0;
+    }
+  </style>
 </head>
 <!-- *†‡  -->
 
@@ -231,16 +240,51 @@
       <div class="columns is-centered has-text-centered">
         <div class="column is-four-fifths">
           <h2 class="title is-3">Visualization Results</h2>
-          <div class="item">
+          <!-- <div class="item">
             <img src="static/images/qual1.png" />
+          </div> -->
+          
+          <div class="row">
+            <figure>
+              <img src="static/images/exp/mag_input.jpg" />
+              <figcaption>Input</figcaption>
+            </figure>
+            <figure>
+              <img src="static/images/exp/mag_target.jpg" />
+              <figcaption>Target</figcaption>
+            </figure>
+            <figure>
+              <img src="static/images/exp/mag_WangICIP.jpg" />
+              <figcaption>Wang <i>et al.</i> </figcaption>
+            </figure>
+            <figure>
+              <img src="static/images/exp/mag_mask.jpg" />
+              <figcaption>He <i>et al.</i></figcaption>
+            </figure>
+            <figure>
+              <img src="static/images/exp/mag_BEDSR.jpg" />
+              <figcaption>BEDSR-Net</figcaption>
+            </figure>
+            <figure>
+              <img src="static/images/exp/mag_ViT.jpg" />
+              <figcaption>w/o Refine</figcaption>
+            </figure>
+            <figure>
+              <img src="static/images/exp/mag_refine.jpg" />
+              <figcaption>w/o ViT</figcaption>
+            </figure>
+            <figure>
+              <img src="static/images/exp/mag_ours.jpg" />
+              <figcaption>Ours</figcaption>
+            </figure>
           </div>
-          <h2 class="subtitle has-text-centered">
-            Visual comparison of competing methods.
-          </h2>
         </div>
+        
       </div>
     </div>
   </section>
+
+  
 
   <!-- Paper poster -->
   <section class="hero is-small is-light">
