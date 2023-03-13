@@ -1,4 +1,9 @@
-# ShaDocNet: Learning Spatial-Aware Tokens in Transformer for Document Shadow Removal
+
+### [ShaDocNet: Learning Spatial-Aware Tokens in Transformer for Document Shadow Removal](https://arxiv.org/abs/2211.16675)
+
+__Xuhang Chen, Xiaodong Cun, Chi-Man Pun, Shuqiang Wang__
+
+University of Macau, SIAT CAS
 
 2023 IEEE International Conference on Acoustics, Speech, and Signal Processing (ICASSP 2023)
 
