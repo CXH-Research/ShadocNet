@@ -1,5 +1,4 @@
 import argparse
-import os
 
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
@@ -8,49 +7,59 @@ from tqdm import tqdm
 import utils
 from data import get_test_data
 from model import *
+from accelerate import Accelerator
+from evaluation.ber import cal_BER
 
 from config import Config
 
-opt = Config('detect.yml')
 
-parser = argparse.ArgumentParser(description='Shadow Removal')
+def main():
+    model = DSDGenerator()
 
-parser.add_argument('--input_dir', default='../', type=str, help='Directory of validation images')
-parser.add_argument('--result_dir', default='./results/', type=str, help='Directory for results')
-parser.add_argument('--weights', default='./pretrained_models/detect_' + opt.TRAINING.VAL_DIR + '.pth', type=str, help='Path to weights')
-parser.add_argument('--gpus', default='0', type=str, help='CUDA_VISIBLE_DEVICES')
+    test_dir = opt.TRAINING.VAL_DIR
+    test_dataset = get_test_data(test_dir, {'patch_size': opt.TRAINING.VAL_PS})
+    test_loader = DataLoader(dataset=test_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZE, shuffle=False, num_workers=8,
+                             drop_last=False, pin_memory=True)
 
-args = parser.parse_args()
+    model, test_loader = accelerator.prepare(model, test_loader)
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
+    utils.load_checkpoint(model, args.weights)
 
-model = DSDGenerator().cuda()
-utils.load_checkpoint(model, args.weights)
-print("===>Testing using weights: ", args.weights)
-
-datasets = [opt.TRAINING.VAL_DIR]
-
-for dataset in datasets:
-    dir_test = os.path.join(args.input_dir, dataset, 'test')
-    test_dataset = get_test_data(dir_test, img_options={'patch_size': 256})
-    test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False, num_workers=16, drop_last=False,
-                             pin_memory=True)
-
-    result_dir = os.path.join(args.result_dir, dataset)
-    utils.mkdir(result_dir)
+    model.eval()
 
     with torch.no_grad():
+        stat_ber = 0
+        stat_acc = 0
         for ii, data_test in enumerate(tqdm(test_loader), 0):
-            torch.cuda.ipc_collect()
-            torch.cuda.empty_cache()
-
-            input_ = data_test[0].cuda()
-            target = data_test[1].cuda()
-            mask = data_test[2].cuda()
+            inp = data_test[0]
+            mas = data_test[2]
             filenames = data_test[3]
 
-            pred = model(input_)['attn']
+            res = model(inp)['attn']
 
-            save_image(pred, os.path.join(result_dir, filenames[0]))
+            res, mas = accelerator.gather((res, mas))
+            ber, acc = cal_BER(res * 255, mas * 255)
+            stat_ber += ber
+            stat_acc += acc
 
+            # save_image(res, os.path.join(args.result_dir, filenames[0]))
+
+    stat_ber /= len(test_loader)
+    stat_acc /= len(test_loader)
+
+    print(f'BER {stat_ber:.2f}, acc {stat_acc:.2f}')
+
+
+if __name__ == '__main__':
+    opt = Config('config.yml')
+
+    accelerator = Accelerator()
+
+    parser = argparse.ArgumentParser(description='Shadow Detection')
+
+    parser.add_argument('--result_dir', default='./results/', type=str, help='Directory for results')
+    parser.add_argument('--weights', default='./pretrained_models/detect_' + opt.MODEL.MODE + '.pth', type=str,
+                        help='Path to weights')
+
+    args = parser.parse_args()
+    main()

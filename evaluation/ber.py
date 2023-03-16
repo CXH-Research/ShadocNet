@@ -1,7 +1,7 @@
 import torch
 
 
-def BER(y_actual, y_hat):
+def cal_BER(y_actual, y_hat):
     y_hat = y_hat.ge(128).float()
     y_actual = y_actual.ge(128).float()
 
@@ -39,11 +39,11 @@ def BER(y_actual, y_hat):
 
     # print(TP/pos)
     # print(TN/neg)
-    if (pos != 0 and neg != 0):
+    if pos != 0 and neg != 0:
         BAC = (.5 * ((TP / pos) + (TN / neg)))
-    elif (neg == 0):
+    elif neg == 0:
         BAC = (.5 * (TP / pos))
-    elif (pos == 0):
+    elif pos == 0:
         BAC = (.5 * (TN / neg))
     else:
         BAC = .5

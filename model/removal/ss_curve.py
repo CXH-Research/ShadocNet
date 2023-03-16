@@ -6,9 +6,7 @@ from .unet import *
 
 
 class SSCurveNet(nn.Module):
-    def __init__(self, model=squeezenet1_1(pretrained=False), plane=64, fusion=SimpleFusion, final_relu=False,
-                 stack=False, cr1=ColorCurveRender,
-                 cr2=ColorCurveRender):
+    def __init__(self):
         super(SSCurveNet, self).__init__()
         self.criterion_l1_loss = losses.l1_relative
         self.criterion_perc = losses.Perceptual()

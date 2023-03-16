@@ -2,11 +2,7 @@ import os
 
 from config import Config
 
-opt = Config('remove.yml')
-
-gpus = ','.join([str(i) for i in opt.GPU])
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = gpus
+opt = Config('config.yml')
 
 import warnings
 
@@ -15,88 +11,28 @@ warnings.filterwarnings('ignore')
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from warmup_scheduler import GradualWarmupScheduler
 
 import utils
 from data import get_training_data, get_validation_data
-from evaluation.removal import measure_all
 from model import *
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Set Seeds #
-utils.seed_everything(3407)
-
-start_epoch = 1
-mode = opt.MODEL.MODE
-session = opt.MODEL.SESSION
-
-# result_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'results', session)
-# model_dir = os.path.join(opt.TRAINING.SAVE_DIR, mode, 'models', session)
-
-# utils.mkdir(result_dir)
-# utils.mkdir(model_dir)
-utils.mkdir('pretrained_models')
-
-train_dir = os.path.join('..', opt.TRAINING.TRAIN_DIR, 'train')
-val_dir = os.path.join('..', opt.TRAINING.VAL_DIR, 'test')
-
-# Model #
-# f_net = CreateNetNeuralPointRender(backbone='mobilenet', plane=256, resmlp=False).to(device)
-# f_net.load_state_dict(torch.load('./pretrained_models/mpr256mlp.pth.tar', map_location=device)['state_dict'])
-remove = SSCurveNet()
-detect = DSDGenerator().cuda()
-detect.load_state_dict(torch.load('./pretrained_models/detect_' + opt.TRAINING.VAL_DIR + '.pth')['state_dict'])
-detect.eval()
-remove.cuda()
-
-new_lr = opt.OPTIM.LR_INITIAL
-
-device_ids = [i for i in range(torch.cuda.device_count())]
-if torch.cuda.device_count() > 1:
-    detect = torch.nn.DataParallel(detect, device_ids=device_ids)
-    remove = torch.nn.DataParallel(remove, device_ids=device_ids)
-
-params = list(remove.parameters())
-optimizer = optim.Adam(params, lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
-
-# Scheduler #
-warmup_epochs = 3
-scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, opt.OPTIM.NUM_EPOCHS - warmup_epochs,
-                                                        eta_min=opt.OPTIM.LR_MIN)
-scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_epochs, after_scheduler=scheduler_cosine)
-scheduler.step()
-
-# DataLoaders #
-train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
-train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.TRAIN_BATCH_SIZE, shuffle=True, num_workers=0,
-                          drop_last=False, pin_memory=True)
-
-val_dataset = get_validation_data(val_dir, {'patch_size': opt.TRAINING.VAL_PS})
-val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZE, shuffle=False, num_workers=0,
-                        drop_last=False,
-                        pin_memory=True)
-
-print('===> Start Epoch {} End Epoch {}'.format(start_epoch, opt.OPTIM.NUM_EPOCHS + 1))
-print('===> Loading datasets')
+from accelerate import Accelerator, DistributedDataParallelKwargs
+from torchmetrics.functional import mean_squared_error, peak_signal_noise_ratio, structural_similarity_index_measure
 
 
 def main():
-    best_psnr = 0
-    best_ssim = 0
+    best_rmse = 100
     best_epoch = 1
-    for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
-        epoch_start_time = time.time()
-        epoch_loss = 0
 
+    for epoch in range(start_epoch, opt.OPTIM.NUM_EPOCHS + 1):
         # Train #
         remove.train()
         for i, data in enumerate(tqdm(train_loader), 0):
-            inp = data[0].cuda()
-            tar = data[1].cuda()
-            gt_mas = data[2].cuda()
+            inp = data[0]
+            tar = data[1]
+            gt_mas = data[2]
+
             mas = detect(inp)['attn']
-            # mas = data[2].to(device)
+
             foremas = 1 - mas
 
             # --- Zero the parameter gradients --- #
@@ -110,33 +46,91 @@ def main():
 
             # loss = loss_rl1_1 + loss_rl1_2 + 0.04 * loss_perc  # + 0.02 * loss_tv
 
-            loss.sum().backward()
+            accelerator.backward(loss)
             optimizer.step()
-            epoch_loss += loss.item()
+
+        scheduler.step()
 
         # Evaluation #
         if epoch % opt.TRAINING.VAL_AFTER_EVERY == 0:
             remove.eval()
-            rmse, psnr, ssim = measure_all(detect, remove, val_loader)
-            if psnr > best_psnr and ssim > best_ssim:
-                best_psnr = psnr
-                best_ssim = ssim
+
+            stat_psnr = 0
+            stat_ssim = 0
+            stat_rmse = 0
+
+            with torch.no_grad():
+                for ii, data in enumerate(tqdm(val_loader), 0):
+                    inp = data[0]
+                    tar = data[1]
+                    gt_mas = data[2]
+
+                    mas = detect(inp)['attn']
+                    foremas = 1 - mas
+
+                    res, _ = remove(inp, gt_mas, mas, foremas, tar)
+                    res, tar = accelerator.gather((res, tar))
+
+                    stat_psnr += peak_signal_noise_ratio(res, tar, data_range=1)
+                    stat_ssim += structural_similarity_index_measure(res, tar, data_range=1)
+                    stat_rmse += mean_squared_error(res * 255, tar * 255, squared=False)
+
+            stat_psnr /= len(val_loader)
+            stat_ssim /= len(val_loader)
+            stat_rmse /= len(val_loader)
+
+            if stat_rmse < best_rmse:
+                best_rmse = stat_rmse
                 best_epoch = epoch
                 torch.save({
                     'epoch': best_epoch,
                     'state_dict': remove.state_dict(),
                     'optimizer': optimizer.state_dict()
-                }, os.path.join('pretrained_models', "remove_" + opt.TRAINING.TRAIN_DIR + ".pth"))
+                }, os.path.join('pretrained_models', "remove_" + opt.MODEL.MODE + ".pth"))
 
-            print("[epoch %d RMSE: %.4f --- best_epoch %d Best_PSNR %.4f Best_SSIM %.4f]" % (
-                epoch, rmse, best_epoch, best_psnr, best_ssim))
-
-        scheduler.step()
-        print("------------------------------------------------------------------")
-        print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.8f}".format(epoch, time.time() - epoch_start_time,
-                                                                                  epoch_loss, scheduler.get_lr()[0]))
-        print("------------------------------------------------------------------")
+            print("[epoch %d RMSE: %.4f | best_epoch %d Best_RMSE %.4f]" % (
+                epoch, stat_rmse, best_epoch, best_rmse))
 
 
 if __name__ == '__main__':
+    kwargs = [DistributedDataParallelKwargs(find_unused_parameters=True)]
+    accelerator = Accelerator(kwargs_handlers=kwargs)
+
+    # Set Seeds #
+    utils.seed_everything(3407)
+
+    start_epoch = 1
+    mode = opt.MODEL.MODE
+    session = opt.MODEL.SESSION
+
+    utils.mkdir('pretrained_models')
+
+    train_dir = opt.TRAINING.TRAIN_DIR
+    val_dir = opt.TRAINING.VAL_DIR
+
+    # Model #
+    remove = SSCurveNet()
+    detect = DSDGenerator()
+
+    optimizer = optim.Adam(remove.parameters(), lr=opt.OPTIM.LR_INITIAL, betas=(0.9, 0.999), eps=1e-8)
+
+    # Scheduler #
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, opt.OPTIM.NUM_EPOCHS, eta_min=opt.OPTIM.LR_MIN)
+
+    # DataLoaders #
+    train_dataset = get_training_data(train_dir, {'patch_size': opt.TRAINING.TRAIN_PS})
+    train_loader = DataLoader(dataset=train_dataset, batch_size=opt.OPTIM.TRAIN_BATCH_SIZE, shuffle=True, num_workers=8,
+                              drop_last=False, pin_memory=True)
+
+    val_dataset = get_validation_data(val_dir, {'patch_size': opt.TRAINING.VAL_PS})
+    val_loader = DataLoader(dataset=val_dataset, batch_size=opt.OPTIM.TEST_BATCH_SIZE, shuffle=False, num_workers=8,
+                            drop_last=False,
+                            pin_memory=True)
+
+    detect, remove, optimizer, scheduler, train_loader, val_loader = accelerator.prepare(detect, remove, optimizer,
+                                                                                         scheduler, train_loader,
+                                                                                         val_loader)
+    utils.load_checkpoint(detect, './pretrained_models/detect_' + opt.MODEL.MODE + '.pth')
+    detect.eval()
+
     main()

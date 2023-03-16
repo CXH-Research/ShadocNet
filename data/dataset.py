@@ -1,9 +1,10 @@
 import os
-from torch.utils.data import Dataset
-import torch
-from PIL import Image
-import torchvision.transforms.functional as TF
 import random
+
+import torch
+import torchvision.transforms.functional as TF
+from PIL import Image
+from torch.utils.data import Dataset
 
 
 def is_image_file(filename):
@@ -98,7 +99,7 @@ class DataLoaderTrain(Dataset):
 
 
 class DataLoaderVal(Dataset):
-    def __init__(self, img_dir, img_options=None, rgb_dir2=None):
+    def __init__(self, img_dir, img_options=None):
         super(DataLoaderVal, self).__init__()
 
         inp_files = sorted(os.listdir(os.path.join(img_dir, 'input')))
